@@ -1086,13 +1086,17 @@ class ReluGrad(Operation):
 class SoftmaxCrossEntropyWithLogits(Operation):
 
   def _run(self, logits, labels):
-    logits = np.exp(logits - np.max(logits))
-    softmax = logits / np.sum(logits, axis=-1, keepdims=True) 
+    exp_logits = np.exp(logits - np.max(logits))
+    softmax = exp_logits / np.sum(exp_logits, axis=-1, keepdims=True) 
     loss = np.sum(-np.log(softmax) * labels, axis=-1)
-    grads = np.expand_dims(np.ones(logits.shape[0]), -1) * softmax - labels
-    return loss, grads
+    logits_grads = np.expand_dims(np.ones_like(loss), -1) * (softmax - labels)
+    return loss, logits_grads
 
   def backprop(self, bwval_list):
+    from array_ops import ExpandDims, Squeeze
+    from arithmetic_ops import Mul, Sub, Neg, Add
+    from math_ops import BatchMatMul
+
     softmax = Softmax(input_list=[self._input_list[0]], graph=self._graph)
     log_softmax = LogSoftmax(input_list=[self._input_list[0]], graph=self._graph) 
 
@@ -1111,13 +1115,19 @@ class SoftmaxCrossEntropyWithLogits(Operation):
     
     mul = Mul(input_list=[(self, 1), (ed, 0)], graph=self._graph)
     neg = Neg(input_list=[(log_softmax, 0)], graph=self._graph)
-    bp_loss = mul2 = Mul(input_list=[(neg, 0), (ed, 0)], graph=self._graph)
-    bmm = BatchMatMul(input_list=[(ed2, 0), (ed1, 0)], graph=self._graph)
-    squeeze = Squeeze(input_list=[(bmm, 0)], graph=self._graph)
-    sub = Sub(input_list=[(bwval_list[1], 0)], graph=self._graph)
+    bp_labels = Mul(input_list=[(neg, 0), (ed, 0)], graph=self._graph)
+
+
+
+    bmm = BatchMatMul(input_list=[(ed1, 0), (ed2, 0)], graph=self._graph)
+    squeeze = Squeeze(input_list=[(bmm, 0)], graph=self._graph, axis=[1])
+    sub = Sub(input_list=[
+        bwval_list[1],
+        (squeeze, 0),
+        ], graph=self._graph)
     mul1 = Mul(input_list=[(sub, 0), (softmax, 0)], graph=self._graph)
-    bp_grads = add = Add(input_list=[(mul1, 0), (mul, 0)], graph=self._graph)
-    return bp_loss, bp_grads
+    bp_logits = Add(input_list=[(mul1, 0), (mul, 0)], graph=self._graph)
+    return bp_logits, bp_labels
 
 
 class LogSoftmax(Operation):

@@ -51,7 +51,6 @@ class InvertPermutation(Operation):
 
 class Range(Operation):
   def _run(self, start, limit, delta):
-    #print(start, limit, delta)
     return np.arange(start, limit, delta)
 
   def backprop(self, bwval_list):
@@ -293,12 +292,15 @@ class ExpandDims(Operation):
 
 
 class Squeeze(Operation):
-  def __init__(self, graph, input_list, axis=None, name=None)
+  def __init__(self, graph, input_list, axis=None, name=None):
     super(Squeeze, self).__init__(graph=graph, input_list=input_list, name=name)
-    self._axis = axis
+    if isinstance(axis, int):
+      axis = (axis,)
+    self._axis = tuple(axis)
 
   def _run(self, inputs):
     outputs = np.squeeze(inputs, axis=self._axis) 
+    return outputs
 
   def backprop(self, bwval_list):
     bp_inputs = Reshape(
