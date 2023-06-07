@@ -10,7 +10,7 @@ class _Filters2DBase(Operation):
   etc.).
   """
 
-  def __init__(self, strides, padding, graph, input_list, name=None):
+  def __init__(self, strides, padding, input_list, graph=None, name=None):
     """Constructor.
 
     Args:
@@ -177,7 +177,7 @@ class _Filters2DBase(Operation):
       h, w = indices
       return inputs[:, h:h+filters_height, w:w+filters_width, :
           ].transpose(0, 3, 1, 2).reshape((batch_size, -1))
-    inputs_mat = np.vstack(np.apply_along_axis(func, 1, img_col_index[:, :2]))
+    inputs_mat = np.vstack(np.apply_along_axis(_func, 1, img_col_index[:, :2]))
 
     return inputs_mat
 
@@ -299,7 +299,7 @@ class _Filters2DBase(Operation):
       return inputs_grads
 
     # [out_height * out_width, batch_size, pad_height, pad_width, in_channels]
-    inputs_grads = np.apply_along_axis(func, 1, img_col_index)
+    inputs_grads = np.apply_along_axis(_func, 1, img_col_index)
 
     # [batch_size, pad_height, pad_width, in_channels]
     # sum the gradients over all `out_height * out_width` slices
@@ -349,39 +349,34 @@ class Conv2D(_Filters2DBase):
     ).transpose(2, 0, 1, 3)
     return outputs
 
-  def backprop(self, bwval_list):
+  def _grad_func(self, in_grad_tensors):
     """
     Args:
-      bwval_list: list of (Op, tensor_index)
+      in_grad_tensors: list of (Op, tensor_index)
     """
-    bwval_op, tensor_index = bwval_list[0]
-
-    input_list = [self._input_list[1],
-                  (bwval_op, tensor_index),
-                  (self._input_list[0][0].get_shape_op(), 0)]
-
-    bp_inputs = Conv2DBackpropInput(
-        strides=self._strides,
-        padding=self._padding,
-        graph=self._graph,
-        input_list=input_list
-    ) 
-    self._input_list[0][0].backprop(bwval_list=[(bp_inputs, 0)])
-
-    input_list = [self._input_list[0],
-                  (bwval_op, tensor_index),
-                  (self._input_list[1][0].get_shape_op(), 0)]
-
-    bp_filters = Conv2DBackpropFilter(
-        strides=self._strides,
-        padding=self._padding,
-        graph=self._graph,
-        input_list=input_list
-    )
-
-    self._input_list[1][0].backprop(bwval_list=[(bp_filters, 0)])
-
-    return bp_inputs, bp_filters
+    with self._graph.as_default_graph():
+      op, tensor_index = self._input_list[0]
+      bp_inputs = Conv2DBackpropInput(
+          strides=self._strides,
+          padding=self._padding,
+          input_list=[
+              self._input_list[1],
+              in_grad_tensors[0],
+              (op.get_shape_op(tensor_index=tensor_index), 0)
+          ]
+      )
+      op, tensor_index = self._input_list[1]
+      bp_filters = Conv2DBackpropFilter(
+          strides=self._strides,
+          padding=self._padding,
+          input_list=[
+              self._input_list[0],
+              in_grad_tensors[0],
+              (op.get_shape_op(tensor_index=tensor_index), 0)
+          ]
+      )
+      out_grad_tensors = [(bp_inputs, 0), (bp_filters, 0)]
+    return out_grad_tensors
 
 
 class Conv2DBackpropInput(_Filters2DBase):
@@ -421,33 +416,25 @@ class Conv2DBackpropInput(_Filters2DBase):
       inputs_grads_mat, inputs_shape, padding, out_size, (filters_height, filters_width))
     return inputs_grads
 
-  def backprop(self, bwval_list):
-    bwval_op, tensor_index = bwval_list[0]
-    input_list = [(bwval_op, tensor_index),
-                  self._input_list[1],
-                  (self._input_list[0][0].get_shape_op(), 0)]
-
-    bp_filters = Conv2DBackpropFilter(
-        strides=self._strides,
-        padding=self._padding,
-        graph=self._graph,
-        input_list=input_list
-    )
-    self._input_list[0][0].backprop(bwval_list=[(bp_filters, 0)])
-
-
-    input_list = [(bwval_op, tensor_index), self._input_list[0]]
-
-    bp_grads = Conv2D(
-        strides=self._strides,
-        padding=self._padding,
-        graph=self._graph,
-        input_list=input_list
-    )
-
-    self._input_list[1][0].backprop(bwval_list=[(bp_grads, 0)])
-
-    return bp_filters, bp_grads
+  def _grad_func(self, in_grad_tensors):
+    with self._graph.as_default_graph():
+      op, tensor_index = self._input_list[0]
+      bp_filters = Conv2DBackpropFilter(
+          strides=self._strides,
+          padding=self._padding,
+          input_list=[
+              in_grad_tensors[0],
+              self._input_list[1],
+              (op.get_shape_op(tensor_index=tensor_index), 0)
+          ]
+      )
+      bp_grads = Conv2D(
+          strides=self._strides,
+          padding=self._padding,
+          input_list=[in_grad_tensors[0], self._input_list[0]]
+      )
+      out_grad_tensors = [(bp_filters, 0), (bp_grads, 0)]
+    return out_grad_tensors
 
 
 class Conv2DBackpropFilter(_Filters2DBase):
@@ -489,41 +476,33 @@ class Conv2DBackpropFilter(_Filters2DBase):
         )).transpose(1, 2, 0, 3)
     return filters_grads
 
-  def backprop(self, bwval_list):
-    bwval_op, tensor_index = bwval_list[0]
-
-    input_list = [(bwval_op, tensor_index),
-                  self._input_list[1],
-                  (self._input_list[0][0].get_shape_op(), 0)] 
-
-    bp_inputs = Conv2DBackpropInput(
-        strides=self._strides,
-        padding=self._padding,
-        graph=self._graph,
-        input_list=input_list
-    )
-
-    self._input_list[0][0].backprop(bwval_list=[(bp_inputs, 0)])
-
-
-    input_list = [self._input_list[0], (bwval_op, tensor_index)]
-
-    bp_grads = Conv2D(
-        strides=self._strides,
-        padding=self._padding,
-        graph=self._graph,
-        input_list=input_list
-    )
-
-    self._input_list[1][0].backprop(bwval_list=[(bp_grads, 0)])
-
-    return bp_inputs, bp_grads
+  def _grad_func(self, in_grad_tensors):
+    with self._graph.as_default_graph():
+      op, tensor_index = self._input_list[0] 
+      bp_inputs = Conv2DBackpropInput(
+          strides=self._strides,
+          padding=self._padding,
+          input_list=[
+              in_grad_tensors[0],
+              self._input_list[1],
+              (op.get_shape_op(tensor_index=tensor_index), 0)
+          ]
+      )
+      bp_grads = Conv2D(
+          strides=self._strides,
+          padding=self._padding,
+          input_list=[self._input_list[0], in_grad_tensors[0]]
+      )
+      out_grad_tensors = [(bp_inputs, 0), (bp_grads, 0)]
+    return out_grad_tensors
 
 
 class _Pooling2DBase(_Filters2DBase):
   """Base class for 2D pooling Operations (MaxPool2D, AvgPool2D, etc.)."""
 
-  def __init__(self, strides, filters_size, padding, graph, input_list, name=None):
+  def __init__(
+      self, strides, filters_size, padding, input_list, graph=None, name=None
+    ):
     """Constructor.
 
     Set `np.nan` as flag of padded value when computing maximum or average.
@@ -575,25 +554,16 @@ class MaxPool2D(_Pooling2DBase):
     )).transpose(2, 0, 1, 3)
     return outputs
 
-  def backprop(self, bwval_list):
-    bwval_op, tensor_index = bwval_list[0]
-
-    input_list = [
-        self._input_list[0],
-        (bwval_op, tensor_index),
-    ]
-
-    maxpool2d_grads = MaxPool2DGrad(
-        strides=self._strides,
-        filters_size=self._filters_size,
-        padding=self._padding,
-        graph=self._graph,
-        input_list=input_list
-    )
-
-    self._input_list[0][0].backprop(bwval_list=[(maxpool2d_grads, 0)])
-
-    return maxpool2d_grads
+  def _grad_func(self, in_grad_tensors):
+    with self._graph.as_default_graph():
+      maxpool2d_grads = MaxPool2DGrad(
+          strides=self._strides,
+          filters_size=self._filters_size,
+          padding=self._padding,
+          input_list=[self._input_list[0], in_grad_tensors[0]]
+      )
+      out_grad_tensors = [(maxpool2d_grads, 0)]
+    return out_grad_tensors
 
 
 class MaxPool2DGrad(_Pooling2DBase):
@@ -647,43 +617,27 @@ class MaxPool2DGrad(_Pooling2DBase):
       inputs_grads_mat, inputs.shape, padding, out_size, self._filters_size)
     return inputs_grads
 
-  def backprop(self, bwval_list):
-    bwval_op, tensor_index = bwval_list[0]
+  def _grad_func(self, in_grad_tensors):
+    with self._graph.as_default_graph():
+      op, tensor_index = self._input_list[1]
+      bp_inputs = MaxPool2DGrad(
+          strides=self._strides,
+          filters_size=self._filters_size,
+          padding=self._padding,
+          input_list= [
+              self._input_list[0],
+              (op.get_zeros_op(tensor_index=tensor_index), 0)
+          ]
+      )
+      bp_grads = MaxPool2DGradGrad(
+          strides=self._strides,
+          filters_size=self._filters_size,
+          padding=self._padding,
+          input_list=[self._input_list[0], in_grad_tensors[0]]
+      )
 
-    input_list = [
-      self._input_list[0],
-      (self._input_list[1][0].get_zeros_op(), 0)
-    ]
-
-
-    bp_inputs = MaxPool2DGrad(
-        strides=self._strides,
-        filters_size=self._filters_size,
-        padding=self._padding,
-        graph=self._graph,
-        input_list=input_list
-    )
-
-    self._input_list[0][0].backprop(bwval_list=[(bp_inputs, 0)])
-
-    input_list = [
-      self._input_list[0],
-      (bwval_op, tensor_index)
-    ]
-
-    bp_grads = MaxPool2DGradGrad(
-        strides=self._strides,
-        filters_size=self._filters_size,
-        padding=self._padding,
-        graph=self._graph,
-        input_list=input_list
-    )
-
-    self._input_list[1][0].backprop(bwval_list=[(bp_grads, 0)])
-
-    return bp_inputs, bp_grads
-    
-
+      out_grad_tensors = [(bp_inputs, 0), (bp_grads, 0)]
+    return out_grad_tensors
 
 
 class MaxPool2DGradGrad(_Pooling2DBase):
@@ -737,43 +691,27 @@ class MaxPool2DGradGrad(_Pooling2DBase):
     return grads_grads
 
 
-  def backprop(self, bwval_list):
-    bwval_op, tensor_index = bwval_list[0]
+  def _grad_func(self, in_grad_tensors):
+    with self._graph.as_default_graph():
+      op, tensor_index = in_grad_tensors[0]
+      bp_inputs = MaxPool2DGrad(
+          strides=self._strides,
+          filters_size=self._filters_size,
+          padding=self._padding,
+          input_list=[
+              self._input_list[0],
+              (op.get_zeros_op(tensor_index=tensor_index), 0)
+          ]
+      )
+      bp_inputs_grads_grads = MaxPool2DGrad(
+          strides=self._strides,
+          filters_size=self._filters_size,
+          padding=self._padding,
+          input_list=[self._input_list[0], in_grad_tensors[0]]
+      )
+      out_grad_tensors = [(bp_inputs, 0), (bp_inputs_grads_grads, 0)]
 
-    input_list = [
-        self._input_list[0],
-        (bwval_op.get_zeros_op(), 0)
-    ]
-
-    bp_inputs = MaxPool2DGrad(
-        strides=self._strides,
-        filters_size=self._filters_size,
-        padding=self._padding,
-        graph=self._graph,
-        input_list=input_list
-    )
-
-    self._input_list[0][0].backprop(bwval_list=[(bp_inputs, 0)])
-
-
-    input_list = [
-        self._input_list[0],
-        (bwval_op, tensor_index)
-    ]
-
-    bp_inputs_grads_grads = MaxPool2DGrad(
-        strides=self._strides,
-        filters_size=self._filters_size,
-        padding=self._padding,
-        graph=self._graph,
-        input_list=input_list
-    )
-    self._input_list[1][0].backprop(bwval_list=[(bp_inputs_grads_grads, 0)])
-
-
-    return bp_inputs, bp_inputs_grads_grads
-   
-
+    return out_grad_tensors
 
 
 class AvgPool2D(_Pooling2DBase):
@@ -807,22 +745,20 @@ class AvgPool2D(_Pooling2DBase):
     )).transpose(2, 0, 1, 3)
     return outputs
 
-  def backprop(self, bwval_list):
-    bwval_op, tensor_index = bwval_list[0]
-
-    input_list = [(bwval_op, tensor_index), (self._input_list[0][0].get_shape_op(), 0)] 
-
-    bp_inputs = AvgPool2DGrad(
-        strides=self._strides,
-        filters_size=self._filters_size,
-        padding=self._padding,
-        graph=self._graph,
-        input_list=input_list
-    )
-
-    self._input_list[0][0].backprop(bwval_list=[(bp_inputs, 0)])
-
-    return bp_inputs 
+  def _grad_func(self, in_grad_tensors):
+    with self._graph.as_default_graph():
+      op, tensor_index = self._input_list[0]
+      bp_inputs = AvgPool2DGrad(
+          strides=self._strides,
+          filters_size=self._filters_size,
+          padding=self._padding,
+          input_list=[
+              in_grad_tensors[0],
+              (op.get_shape_op(tensor_index=tensor_index), 0)
+          ]
+      )
+      out_grad_tensors = [(bp_inputs, 0)]
+    return out_grad_tensors
 
 
 class AvgPool2DGrad(_Pooling2DBase):
@@ -882,7 +818,7 @@ class AvgPool2DGrad(_Pooling2DBase):
     img_col_index = np.vstack([h_grid.ravel(), w_grid.ravel()]).T
 
     # [out_height * out_width]
-    divisor = np.vstack(np.apply_along_axis(func, 1, img_col_index))
+    divisor = np.vstack(np.apply_along_axis(_func, 1, img_col_index))
 
     #[out_height*out_width, batch_size*in_channels*filters_height*filters_width]
     ind_mat = np.ones((
@@ -912,17 +848,16 @@ class AvgPool2DGrad(_Pooling2DBase):
       inputs_grads_mat, inputs_shape, padding, out_size, self._filters_size)
     return inputs_grads
 
-  def backprop(self, bwval_list):
-    bwval_op, tensor_index = bwval_list[0]
-
-    input_list = [(bwval_op, tensor_index)] 
-
-    bp_grads = AvgPool2D(strides=self._strides, filters_size=self._filters_size, padding=self._padding, graph=self._graph, input_list=input_list)
-
-    self._input_list[0][0].backprop(bwval_list=[(bp_grads, 0)])
-
-    return bp_grads 
-
+  def _grad_func(self, in_grad_tensors):
+    with self._graph.as_default_graph():
+      bp_grads = AvgPool2D(
+          strides=self._strides,
+          filters_size=self._filters_size,
+          padding=self._padding,
+          input_list=in_grad_tensors,
+      )
+      out_grad_tensors = [(bp_grads, 0)]
+    return out_grad_tensors
 
 
 class FusedBatchNorm(Operation):
@@ -1006,30 +941,37 @@ class Sigmoid(Operation):
     outputs = 1 / (1 + np.exp(-inputs)) 
     return outputs
 
-  def backprop(self, bwval_list):
-    bp_inputs = SigmoidGrad(
-        input_list=[(self, 0), bwval_list[0]], graph=self._graph
-    )
-    return bp_inputs
+  def _grad_func(self, in_grad_tensors):
+    with self._graph.as_default_graph():
+      bp_inputs = SigmoidGrad(
+          input_list=[(self, 0), in_grad_tensors[0]]
+      )
+      out_grad_tensors = [(bp_inputs, 0)]
+    return out_grad_tensors
+
 
 class SigmoidGrad(Operation):
   def _run(self, outputs, grads):
     outputs_inputs_grads = outputs * (1 - outputs) * grads
     return outputs_inputs_grads
 
-  def backprop(self, bwval_list):
+  def _grad_func(self, in_grad_tensors):
     from arithmetic_ops import Mul, Sub
 
-    mul = Mul(input_list=[bwval_list[0], self._input_list[1]], graph=self._graph)
-    mul1 = Mul(input_list=[
-        (Const(value=np.asarray(2), graph=self._graph), 0),
-        (mul, 0)], graph=self._graph)
-    mul2 = Mul(input_list=[self._input_list[0], (mul1, 0)], graph=self._graph) 
-    bp_outputs = Sub(input_list=[(mul, 0), (mul2, 0)], graph=self._graph)
+    with self._graph.as_default_graph():
+      mul = Mul(input_list=[in_grad_tensors[0], self._input_list[1]])
+      mul1 = Mul(
+          input_list=[
+              (Const(value=np.asarray(2)), 0),
+              (mul, 0)
+        ]
+      )
+      mul2 = Mul(input_list=[self._input_list[0], (mul1, 0)]) 
+      bp_outputs = Sub(input_list=[(mul, 0), (mul2, 0)])
 
-    bp_grads = SigmoidGrad(input_list=[self._input_list[0], bwval_list[0]], graph=self._graph)
-    return bp_outputs, bp_grads
-
+      bp_grads = SigmoidGrad(input_list=[self._input_list[0], in_grad_tensors[0]])
+    out_grad_tensors = [(bp_outputs, 0), (bp_grads, 0)]
+    return out_grad_tensors
 
 
 class Tanh(Operation):
@@ -1037,9 +979,11 @@ class Tanh(Operation):
     outputs = np.tanh(inputs)
     return outputs
 
-  def backprop(self, bwval_list):
-    bp_inputs = TanhGrad(input_list=[(self, 0), bwval_list[0]], graph=self._graph)
-    return bp_inputs
+  def _grad_func(self, in_grad_tensors):
+    with self._graph.as_default_graph():
+      bp_inputs = TanhGrad(input_list=[(self, 0), in_grad_tensors[0]])
+      out_grad_tensors = [(bp_inputs, 0)]
+    return out_grad_tensors
 
 
 class TanhGrad(Operation):
@@ -1047,19 +991,21 @@ class TanhGrad(Operation):
     outputs_inputs_grads = (1 - outputs * outputs) * grads
     return outputs_inputs_grads    
 
-  def backprop(self, bwval_list):
+  def _grad_func(self, in_grad_tensors):
     from arithmetic_ops import Mul
 
-    mul = Mul(input_list=[
-        (Const(value=np.asarray(-2), graph=self._graph), 0),
-        bwval_list[0]], graph=self._graph)
-
-    mul1 = Mul(input_list=[(mul, 0), self._input_list[1]], graph=self._graph)
-
-    bp_outputs = Mul(input_list=[(mul1, 0), self._input_list[0]], graph=self._graph)
-
-    bp_grads = TanhGrad(input_list=[self._input_list[0], bwval_list[0]], graph=self._graph)
-    return bp_outputs, bp_grads
+    with self._graph.as_default_graph():
+      mul = Mul(
+          input_list=[
+              (Const(value=np.asarray(-2)), 0),
+              in_grad_tensors[0]
+          ]
+      )
+      mul1 = Mul(input_list=[(mul, 0), self._input_list[1]])
+      bp_outputs = Mul(input_list=[(mul1, 0), self._input_list[0]])
+      bp_grads = TanhGrad(input_list=[self._input_list[0], in_grad_tensors[0]])
+      out_grad_tensors = [(bp_outputs, 0), (bp_grads, 0)]
+    return out_grad_tensors
 
 
 class Relu(Operation):
@@ -1067,9 +1013,11 @@ class Relu(Operation):
     outputs = np.maximum(0, inputs)
     return outputs 
 
-  def backprop(self, bwval_list):
-    bp_inputs = ReluGrad(input_list=[(self, 0), bwval_list[0]], graph=self._graph)
-    return bp_inputs
+  def _grad_func(self, in_grad_tensors):
+    with self._graph.as_default_graph():
+      bp_inputs = ReluGrad(input_list=[(self, 0), in_grad_tensors[0]])
+      out_grad_tensors = [(bp_inputs, 0)]
+    return out_grad_tensors
 
 
 class ReluGrad(Operation):
@@ -1077,10 +1025,13 @@ class ReluGrad(Operation):
     outputs_inputs_grads = np.where(outputs <= 0, 0, grads)
     return outputs_inputs_grads
 
-  def backprop(self, bwval_list):
-    bp_outputs = self._input_list[0][0].get_zeros_op()
-    bp_grads = ReluGrad(input_list=[self._input_list[0], bwval_list[0]], graph=self._graph) 
-    return bp_outputs, bp_grads
+  def _grad_func(self, in_grad_tensors):
+    with self._graph.as_default_graph():
+      op, tensor_index = self._input_list[0]
+      bp_outputs = op.get_zeros_op(tensor_index=tensor_index)
+      bp_grads = ReluGrad(input_list=[self._input_list[0], in_grad_tensors[0]]) 
+      out_grad_tensors = [(bp_outputs, 0), (bp_grads, 0)]
+    return out_grad_tensors 
 
 
 class SoftmaxCrossEntropyWithLogits(Operation):
@@ -1092,42 +1043,42 @@ class SoftmaxCrossEntropyWithLogits(Operation):
     logits_grads = np.expand_dims(np.ones_like(loss), -1) * (softmax - labels)
     return loss, logits_grads
 
-  def backprop(self, bwval_list):
+  def _grad_func(self, in_grad_tensors):
     from array_ops import ExpandDims, Squeeze
     from arithmetic_ops import Mul, Sub, Neg, Add
     from math_ops import BatchMatMul
 
-    softmax = Softmax(input_list=[self._input_list[0]], graph=self._graph)
-    log_softmax = LogSoftmax(input_list=[self._input_list[0]], graph=self._graph) 
+    with self._graph.as_default_graph():
+      softmax = Softmax(input_list=[self._input_list[0]])
+      log_softmax = LogSoftmax(input_list=[self._input_list[0]]) 
 
-    ed = ExpandDims(input_list=[
-        bwval_list[0],
-        (Const(value=np.asarray(-1), graph=self._graph), 0)
-      ], graph=self._graph)
-    ed1 = ExpandDims(input_list=[
-        bwval_list[1],
-        (Const(value=np.asarray(1), graph=self._graph), 0)
-      ], graph=self._graph)
-    ed2 = ExpandDims(input_list=[
-        (softmax, 0),
-        (Const(value=np.asarray(2), graph=self._graph), 0)
-      ], graph=self._graph)
+      ed = ExpandDims(input_list=[
+          in_grad_tensors[0],
+          (Const(value=np.asarray(-1)), 0)
+        ])
+      ed1 = ExpandDims(input_list=[
+          in_grad_tensors[1],
+          (Const(value=np.asarray(1)), 0)
+        ])
+      ed2 = ExpandDims(input_list=[
+          (softmax, 0),
+          (Const(value=np.asarray(2)), 0)
+        ])
     
-    mul = Mul(input_list=[(self, 1), (ed, 0)], graph=self._graph)
-    neg = Neg(input_list=[(log_softmax, 0)], graph=self._graph)
-    bp_labels = Mul(input_list=[(neg, 0), (ed, 0)], graph=self._graph)
+      mul = Mul(input_list=[(self, 1), (ed, 0)])
+      neg = Neg(input_list=[(log_softmax, 0)])
+      bp_labels = Mul(input_list=[(neg, 0), (ed, 0)])
 
-
-
-    bmm = BatchMatMul(input_list=[(ed1, 0), (ed2, 0)], graph=self._graph)
-    squeeze = Squeeze(input_list=[(bmm, 0)], graph=self._graph, axis=[1])
-    sub = Sub(input_list=[
-        bwval_list[1],
-        (squeeze, 0),
-        ], graph=self._graph)
-    mul1 = Mul(input_list=[(sub, 0), (softmax, 0)], graph=self._graph)
-    bp_logits = Add(input_list=[(mul1, 0), (mul, 0)], graph=self._graph)
-    return bp_logits, bp_labels
+      bmm = BatchMatMul(input_list=[(ed1, 0), (ed2, 0)])
+      squeeze = Squeeze(input_list=[(bmm, 0)], axis=[1])
+      sub = Sub(input_list=[
+          in_grad_tensors[1],
+          (squeeze, 0),
+          ])
+      mul1 = Mul(input_list=[(sub, 0), (softmax, 0)])
+      bp_logits = Add(input_list=[(mul1, 0), (mul, 0)])
+      out_grad_tensors = [(bp_logits, 0), (bp_labels, 0)]
+    return out_grad_tensors
 
 
 class LogSoftmax(Operation):
@@ -1141,18 +1092,23 @@ class LogSoftmax(Operation):
     outputs = np.log(softmax)
     return outputs
 
-  def backprop(self, bwval_list):
+  def _grad_func(self, in_grad_tensors):
     from math_ops import Exp, Sum
     from arithmetic_ops import Mul, Sub
 
-    exp = Exp(input_list=[(self, 0)], graph=self._graph)  
-    sum0 = Sum(keepdims=True, input_list=[
-      bwval_list[0],
-      (Const(value=np.asarray([-1]), graph=self._graph), 0)], graph=self._graph
-    )
-    mul = Mul(input_list=[(sum0, 0), (exp, 0)], graph=self._graph)
-    bp_inputs = Sub(input_list=[bwval_list[0], (mul, 0)], graph=self._graph)
-    return bp_inputs
+    with self._graph.as_default_graph():
+      exp = Exp(input_list=[(self, 0)])  
+      sum0 = Sum(
+          keepdims=True,
+          input_list=[
+              in_grad_tensors[0],
+              (Const(value=np.asarray([-1])), 0)
+          ]
+      )
+      mul = Mul(input_list=[(sum0, 0), (exp, 0)])
+      bp_inputs = Sub(input_list=[in_grad_tensors[0], (mul, 0)])
+      out_grad_tensors = [(bp_inputs, 0)]
+    return out_grad_tensors
 
 
 class Softmax(Operation):
@@ -1161,14 +1117,22 @@ class Softmax(Operation):
     softmax = logits / np.sum(logits, axis=-1, keepdims=True)
     return softmax
 
-  def backprop(self, bwval_list):
+  def _grad_func(self, in_grad_tensors):
     from arithmetic_ops import Mul, Sub
     from math_ops import Sum
- 
-    mul = Mul(input_list=[bwval_list[0], (self, 0)], graph=self._graph)
-    sum0 = Sum(input_list=[(mul, 0), (Const(value=np.asarray(-1), graph=self._graph), 0)], graph=self._graph, keepdims=True)
-    sub = Sub(input_list=[bwval_list[0], (sum0, 0)], graph=self._graph)
-    bp_inputs = Mul(input_list=[(sub, 0), (self, 0)], graph=self._graph)
-    return bp_inputs
+
+    with self._graph.as_default_graph(): 
+      mul = Mul(input_list=[in_grad_tensors[0], (self, 0)])
+      sum0 = Sum(
+          keepdims=True,
+          input_list=[
+              (mul, 0),
+              (Const(value=np.asarray(-1)), 0)
+          ]
+      )
+      sub = Sub(input_list=[in_grad_tensors[0], (sum0, 0)])
+      bp_inputs = Mul(input_list=[(sub, 0), (self, 0)])
+      out_grad_tensors = [(bp_inputs, 0)]
+    return out_grad_tensors
 
 

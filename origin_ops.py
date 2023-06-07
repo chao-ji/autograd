@@ -1,7 +1,7 @@
 from operation import Operation
 
 class Const(Operation):
-  def __init__(self, value, graph, name=None):
+  def __init__(self, value, graph=None, name=None):
     super(Const, self).__init__(graph=graph, name=name)
     self._value = value
 
@@ -10,23 +10,15 @@ class Const(Operation):
     return self._value   
 
 
-  def backprop(self, bwval_list):
-    """no-op"""
-    return
-
-
 class Placeholder(Operation):
-
   pass
 
 
 class Variable(Operation):
 
-  def __init__(self, initializaer, graph, name=None):
+  def __init__(self, initializaer, graph=None, name=None):
     pass
 
 
-class Fill(Operation):
-  pass
 
 

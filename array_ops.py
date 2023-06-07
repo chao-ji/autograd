@@ -1,5 +1,4 @@
-"""
-"""
+"""Operations on multi-dimensional arrays."""
 import numpy as np
 
 from operation import Operation
@@ -9,56 +8,50 @@ from math_ops import Sum, Mean
 
 
 class Reshape(Operation):
-
   def _run(self, inputs, shape):
     outputs = np.reshape(inputs, shape.astype("int32"))
     return outputs
 
-  def backprop(self, bwval_list):
-    bwval_op, tensor_index = bwval_list[0]
-    input_list = [(bwval_op, tensor_index), (self._input_list[0][0].get_shape_op(), 0)]
-    bp_inputs = Reshape(graph=self._graph, input_list=input_list)
-    self._input_list[0][0].backprop(bwval_list=[(bp_inputs, 0)])
-    return bp_inputs 
+  def _grad_func(self, in_grad_tensors):
+    with self._graph.as_default_graph():
+      op, tensor_index = self._input_list[0]
+      bp_inputs = Reshape(
+          input_list=[
+              in_grad_tensors[0],
+              (op.get_shape_op(tensor_index=tensor_index), 0)
+          ]
+      )
+      out_grad_tensors = [(bp_inputs, 0)]
+    return out_grad_tensors
 
 
 class Transpose(Operation):
-
   def _run(self, inputs, perm):
     outputs = np.transpose(inputs, perm)
     return outputs
 
-  def backprop(self, bwval_list):
-    bwval_op, tensor_index = bwval_list[0]
-    input_list = [self._input_list[1]]
-    invert_perm = InvertPermutation(graph=self._graph, input_list=input_list)
-
-    input_list = [(bwval_op, tensor_index), (invert_perm, 0)]
-    bp_inputs = Transpose(graph=self._graph, input_list=input_list)
-
-    self._input_list[0][0].backprop(bwval_list=[(bp_inputs, 0)])
-    return bp_inputs
+  def _grad_func(self, in_grad_tensors):
+    with self._graph.as_default_graph():
+      invert_perm = InvertPermutation(input_list=[self._input_list[1]])
+      bp_inputs = Transpose(input_list=[in_grad_tensors[0], (invert_perm, 0)])
+      out_grad_tensors = [(bp_inputs, 0)]
+    return out_grad_tensors
 
 
 class InvertPermutation(Operation):
-
   def _run(self, perm):
-    return np.argsort(perm)
-
-  def backprop(self, bwval_list):
-    return
+    outputs = np.argsort(perm)
+    return outputs
 
 
 class Range(Operation):
   def _run(self, start, limit, delta):
-    return np.arange(start, limit, delta)
-
-  def backprop(self, bwval_list):
-    return
+    outputs = np.arange(start, limit, delta)
+    return outputs
 
 
 class Pack(Operation):
-  def __init__(self, axis, graph, input_list, name=None):
+  def __init__(self, axis, input_list, graph=None, name=None):
     super(Pack, self).__init__(graph=graph, input_list=input_list, name=name)
     self._axis = axis
     self._num = len(input_list)
@@ -67,17 +60,15 @@ class Pack(Operation):
     outputs = np.stack(input_tensor_values, axis=self._axis)
     return outputs
 
-  def backprop(self, bwval_list):
-    bwval_op, tensor_index = bwval_list[0]
-    input_list = [(bwval_op, tensor_index)]
-    bp_inputs = Unpack(axis=self._axis, graph=self._graph, input_list=input_list)
-    for i in range(self._num): 
-      self._input_list[i][0].backprop(bwval_list=[(bp_inputs, i)])
-    return bp_inputs
-    
+  def _grad_func(self, in_grad_tensors):
+    with self._graph.as_default_graph():
+      bp_inputs = Unpack(axis=self._axis, input_list=[in_grad_tensors[0]])
+      out_grad_tensors = [(bp_inputs, i) for i in range(self._num)]
+    return out_grad_tensors
+
 
 class Unpack(Operation):
-  def __init__(self, axis, graph, input_list, num=None, name=None):
+  def __init__(self, axis, input_list, graph=None, num=None, name=None):
     super(Unpack, self).__init__(graph=graph, input_list=input_list, name=name)
     self._axis = axis
   
@@ -87,40 +78,59 @@ class Unpack(Operation):
     outputs = [np.squeeze(output, axis=self._axis) for output in outputs]
     return outputs
 
-  def backprop(self, bwval_list):
-    input_list = bwval_list
-    bp_inputs = Pack(axis=self._axis, graph=self._graph, input_list=input_list)
-
-    self._input_list[0][0].backprop(bwval_list=[(bp_inputs, 0)])
-    return bp_inputs
+  def _grad_func(self, in_grad_tensors):
+    with self._graph.as_default_graph():
+      bp_inputs = Pack(
+          axis=self._axis,
+          input_list=in_grad_tensors
+      )
+      out_grad_tensors = [(bp_inputs, 0)]
+    return out_grad_tensors
 
 
 
 class Tile(Operation):
-
   def _run(self, inputs, multiples):
     outputs = np.tile(inputs, multiples)
     return outputs
 
-  def backprop(self, bwval_list):
-    bwval_op, tensor_index = bwval_list[0]
-    input_list = [self._input_list[1], (self._input_list[0][0].get_shape_op(), 0)]
-    pack = Pack(axis=0, graph=self._graph, input_list=input_list)
-    input_list = [(pack, 0), (Const(value=np.asarray((1, 0)), graph=self._graph), 0)]
-    transpose = Transpose(input_list=input_list, graph=self._graph)
-    input_list = [(transpose, 0), (Const(value=np.asarray(-1), graph=self._graph), 0 )]
-    reshape = Reshape(input_list=input_list, graph=self._graph)
-
-    input_list = [(bwval_op, tensor_index), (reshape, 0)]
-    reshape1 = Reshape(input_list=input_list, graph=self._graph)
-
-    input_list = [(Const(value=np.asarray(0), graph=self._graph), 0), (reshape.get_size_op(), 0), (Const(value=np.asarray(2), graph=self._graph), 0)]
-    reduction_indices = Range(input_list=input_list, graph=self._graph)
-
-    input_list = [(reshape1, 0), (reduction_indices, 0)]
-    bp_inputs = Sum(input_list=input_list, graph=self._graph)
-
-    return bp_inputs
+  def _grad_func(self, in_grad_tensors):
+    with self._graph.as_default_graph():
+      op, tensor_index = self._input_list[0]
+      pack = Pack(
+          axis=0,
+          input_list=[
+              self._input_list[1],
+              (op.get_shape_op(tensor_index=tensor_index), 0)
+          ]
+      )
+      transpose = Transpose(
+          input_list=[
+            (pack, 0),
+            (Const(value=np.asarray((1, 0))), 0)
+          ]
+      )
+      reshape = Reshape(
+          input_list=[
+            (transpose, 0),
+            (Const(value=np.asarray(-1)), 0)
+          ]
+      )
+      reshape1 = Reshape(
+          input_list=[in_grad_tensors[0], (reshape, 0)]
+      )
+      reduction_indices = Range(
+          input_list=[
+              (Const(value=np.asarray(0)), 0),
+              (reshape.get_size_op(tensor_index=0), 0),
+              (Const(value=np.asarray(2)), 0)
+          ]
+      )
+      bp_inputs = Sum(
+          input_list=[(reshape1, 0), (reduction_indices, 0)]
+      )
+      out_grad_tensors = [(bp_inputs, 0)]
+    return out_grad_tensors
 
 
 class StridedSlice(Operation):
@@ -141,13 +151,18 @@ class StridedSlice(Operation):
     outputs = inputs.ravel()[indices].reshape(
         tuple(map(len, slice_indices_list))
     )
-    return outputs
+    return outputs 
 
-  def backprop(self, bwval_list):
-    input_list = [(self._input_list[0][0].get_shape_op(), 0)
-        ] + self._input_list[1:4] + bwval_list
-    inputs_grads = StridedSliceGrad(graph=self._graph, input_list=input_list)
-    return inputs_grads
+  def _grad_func(self, in_grad_tensors):
+    with self._graph.as_default_graph():
+      op, tensor_index = self._input_list[0]
+      ssg = StridedSliceGrad(
+          input_list=[
+              (op.get_shape_op(tensor_index=tensor_index), 0)
+          ] + self._input_list[1:4] + in_grad_tensors
+      )
+      out_grad_tensors = [(ssg, 0)]
+    return out_grad_tensors
 
 
 class StridedSliceGrad(Operation):
@@ -171,12 +186,13 @@ class StridedSliceGrad(Operation):
     
     return inputs_grads
 
-  def backprop(self, bwval_list):
-    bp_grads = StridedSlice(
-        graph=self._graph,
-        input_list=bwval_list + self._input_list[1:4]
-    )     
-    return bp_grads
+  def _grad_func(self, in_grad_tensors):
+    with self._graph.as_default_graph():
+      bp_grads = StridedSlice(
+          input_list=in_grad_tensors + self._input_list[1:4]
+      )     
+      out_grad_tensors = [(bp_grads, 0)]
+    return out_grad_tensors
 
 
 class Slice(Operation):
@@ -203,48 +219,70 @@ class Slice(Operation):
     )
     return outputs
 
-  def backprop(self, bwval_list): 
+  def _grad_func(self, in_grad_tensors):
     from arithmetic_ops import Sub
-    sub = Sub(input_list=
-        [(self._input_list[0][0].get_shape_op(), 0)] + 
-        [(self.get_shape_op(), 0)],
-          graph=self._graph
-    ) 
 
-    sub1 = Sub(input_list=[(sub, 0), self._input_list[1]], graph=self._graph)
-    pack = Pack(axis=0, input_list=[(self._input_list[0][0].get_rank_op(), 0), (Const(value=np.asarray(1), graph=self._graph), 0)], graph=self._graph) 
+    with self._graph.as_default_graph():
 
-    reshape = Reshape(input_list=[self._input_list[1], (pack, 0)], graph=self._graph)
-    reshape1 = Reshape(input_list=[(sub1, 0), (pack, 0)], graph=self._graph)
+      op, tensor_index = self._input_list[0]
+      sub = Sub(input_list=[
+              (op.get_shape_op(tensor_index=tensor_index), 0), 
+              (self.get_shape_op(tensor_index=0), 0)
+          ],
+      ) 
+      sub1 = Sub(
+          input_list=[(sub, 0), self._input_list[1]],
+      )
+      pack = Pack(
+          axis=0,
+          input_list=[
+              (op.get_rank_op(tensor_index=tensor_index), 0),
+              (Const(value=np.asarray(1)), 0)
+          ],
+      ) 
+      reshape = Reshape(input_list=[self._input_list[1], (pack, 0)])
+      reshape1 = Reshape(input_list=[(sub1, 0), (pack, 0)])
+      concat = Concat(
+          input_list=[
+              (Const(value=np.asarray(1)), 0),
+              (reshape, 0), (reshape1, 0)
+          ],
+      )
 
-    concat = Concat(input_list=[(Const(value=np.asarray(1), graph=self._graph), 0), (reshape, 0), (reshape1, 0)], graph=self._graph)
+      bp_inputs = Pad(input_list=in_grad_tensors+[(concat, 0)])
+      out_grad_tensors = [(bp_inputs, 0)]
+    return out_grad_tensors
 
-    bp_inputs = Pad(input_list=bwval_list+[(concat, 0)], graph=self._graph) 
-    return bp_inputs
 
 class Concat(Operation):
-  
   def _run(self, axis, *input_tensor_values):
     outputs = np.concatenate(input_tensor_values, axis=axis) 
     return outputs
 
-  def backprop(self, bwval_list):
+  def _grad_func(self, in_grad_tensors):
     from arithmetic_ops import FloorMod
-
-    shapes = [(arg[0].get_shape_op(), 0) for arg in self._input_list[1:]]
-
-    mod = FloorMod(input_list=[self._input_list[0]] + [(self._input_list[1][0].get_rank_op(), 0)], graph=self._graph)
-
-    offset = ConcatOffset(input_list=[(mod, 0)]+shapes, graph=self._graph) 
-
-    input_list = [(offset, i) for i in range(len(self._input_list) - 1)]
-
-    grads_list = []
-    for i in range(len(self._input_list) - 1):
-
-      grads = Slice(input_list=[bwval_list[0]] + [(offset, i)] + [shapes[i]], graph=self._graph)
-      grads_list.append(grads)
-    return grads_list
+    
+    with self._graph.as_default_graph():
+      shapes = [
+          (arg[0].get_shape_op(tensor_index=arg[1]), 0)
+              for arg in self._input_list[1:]
+      ]
+      op, tensor_index = self._input_list[1]
+      mod = FloorMod(
+          input_list=[self._input_list[0]] + [
+              (op.get_rank_op(tensor_index=tensor_index), 0)
+          ],
+      )
+      offset = ConcatOffset(
+          input_list=[(mod, 0)]+shapes,
+      ) 
+      out_grad_tensors = []
+      for i in range(len(self._input_list) - 1):
+        out_grad_tensors.append((
+            Slice(input_list=[in_grad_tensors[0]] + [(offset, i)] + [shapes[i]],
+            ), 0
+        ))
+    return out_grad_tensors
 
 
 class ConcatOffset(Operation):
@@ -254,12 +292,9 @@ class ConcatOffset(Operation):
     shapes = [s for s in shapes]
     return shapes
 
-  def backprop(self, bwval_list):
-    return
-
 
 class Pad(Operation):
-  def __init__(self, graph, input_list, name=None, constant_values=0):
+  def __init__(self, input_list, graph=None, name=None, constant_values=0):
     super(Pad, self).__init__(graph=graph, input_list=input_list, name=name)
     self._constant_values = constant_values
 
@@ -267,14 +302,40 @@ class Pad(Operation):
     outputs = np.pad(inputs, paddings, constant_values=self._constant_values)
     return outputs
 
-  def backprop(self, bwval_list):
-    pack = Pack(axis=0, input_list=[(self._input_list[0][0].get_rank_op(), 0), (Const(value=np.asarray(1), graph=self._graph), 0)], graph=self._graph)
+  def _grad_func(self, in_grad_tensors):
+    with self._graph.as_default_graph():
+      op, tensor_index = self._input_list[0]
+      pack = Pack(
+          axis=0,
+          input_list=[
+              (op.get_rank_op(tensor_index=tensor_index), 0),
+              (Const(value=np.asarray(1)), 0)
+          ],
+      )
 
-    slice0 = Slice(input_list=[self._input_list[1], (Const(value=np.asarray((0, 0)), graph=self._graph), 0), (pack, 0)], graph=self._graph)
-    reshape = Reshape(input_list=[(slice0, 0), (Const(value=np.asarray(-1), graph=self._graph), 0)], graph=self._graph) 
+      slice0 = Slice(
+          input_list=[
+              self._input_list[1],
+              (Const(value=np.asarray((0, 0))), 0),
+              (pack, 0)
+          ],
+      )
+      reshape = Reshape(
+          input_list=[
+              (slice0, 0),
+              (Const(value=np.asarray(-1)), 0)
+          ],
+      ) 
 
-    bp_inputs = Slice(input_list=[bwval_list[0], (reshape, 0), (self._input_list[0][0].get_shape_op(), 0)], graph=self._graph)
-    return bp_inputs
+      bp_inputs = Slice(
+          input_list=[
+              in_grad_tensors[0],
+              (reshape, 0),
+              (op.get_shape_op(tensor_index=tensor_index), 0)
+          ],
+      )
+      out_grad_tensors = [(bp_inputs, 0)]
+    return out_grad_tensors 
 
 
 class ExpandDims(Operation):
@@ -282,17 +343,20 @@ class ExpandDims(Operation):
     outputs = np.expand_dims(inputs, axis.item())
     return outputs
 
-  def backprop(self, bwval_list):
-    bwval_op, tensor_index = bwval_list[0]
-    bp_inputs = Reshape(
-        graph=self._graph,
-        input_list=[bwval_list[0]] + [(self._input_list[0][0].get_shape_op(), 0)] 
-    )
-    return bp_inputs
+  def _grad_func(self, in_grad_tensors):
+    with self._graph.as_default_graph():
+      op, tensor_index = self._input_list[0]
+      bp_inputs = Reshape(
+          input_list=[
+              in_grad_tensors[0], (op.get_shape_op(tensor_index=tensor_index), 0)
+          ] 
+      )
+      out_grad_tensors = [(bp_inputs, 0)]
+    return out_grad_tensors
 
 
 class Squeeze(Operation):
-  def __init__(self, graph, input_list, axis=None, name=None):
+  def __init__(self, input_list, graph=None, axis=None, name=None):
     super(Squeeze, self).__init__(graph=graph, input_list=input_list, name=name)
     if isinstance(axis, int):
       axis = (axis,)
@@ -302,23 +366,22 @@ class Squeeze(Operation):
     outputs = np.squeeze(inputs, axis=self._axis) 
     return outputs
 
-  def backprop(self, bwval_list):
-    bp_inputs = Reshape(
-        input_list=[
-            bwval_list[0], (self._input_list[0][0].get_shape_op(), 0)
-        ],
-        graph=self._graph
-    )
-    return bp_inputs
+  def _grad_func(self, in_grad_tensors):
+    with self._graph.as_default_graph():
+      op, tensor_index = self._input_list[0]
+      bp_inputs = Reshape(
+          input_list=[
+              in_grad_tensors[0], (op.get_shape_op(tensor_index=tensor_index), 0)
+          ],
+      )
+      out_grad_tensors = [(bp_inputs, 0)]
+    return out_grad_tensors
+
 
 class Fill(Operation):
   def _run(self, dims, value):
     outputs = np.ones(dims, dtype="float32") * value
     return outputs
-
-  def backprop(self, bwval_list):
-    return
-
 
 
 class ListDiff(Operation):
@@ -326,6 +389,3 @@ class ListDiff(Operation):
     outputs = np.setdiff1d(x, y)
     return outputs
 
-  def backprop(self, bwval_list):
-    return
- 
