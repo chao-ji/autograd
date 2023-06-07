@@ -26,7 +26,7 @@ class Operation(object):
     self._graph = get_default_graph() if graph is None else graph
     self._input_list = input_list # list of (Op, value_index)
     self._graph.add_op(op=self, name=name)
-    self._consumers = defaultdict(list) 
+    self._consumers = defaultdict(list) # {tensor_index: list of ops}
 
     if hasattr(self, "_grad_func"):
       for op, tensor_index in input_list:
@@ -62,16 +62,29 @@ class Operation(object):
     else:
       self._graph._runtime._values[self.name].append(outputs)
 
+  def _record_consumer_count(self):
+
+    queue = [self]
+    consumers = dict() 
+    while len(queue):
+      op = queue.pop(0)
+      consumers[op] = {
+          tensor_index: len(op._consumers[tensor_index])
+              for tensor_index in op._consumers
+      }
+      for child_op, _ in op._input_list:
+        if child_op not in consumers:
+          queue.append(child_op)
+    return consumers
+
   def backprop(self, grad_tensors):
-    #return self._grad_func(grad_tensors)
-
-
     from math_ops import AddN 
 
-    grad_accumulate = dict() 
+    consumers = self._record_consumer_count() 
+    grad_accumulate = dict() # {op: {tensor_index: [list of received grad tensors]}}
     grad_accumulate[self] = defaultdict(
         list, {index:
-            [grad_tensor] for index, grad_tensor in enumerate(grad_tensors)
+            grad_tensor for index, grad_tensor in enumerate(grad_tensors)
         }
     )
 
@@ -82,36 +95,32 @@ class Operation(object):
       if not hasattr(op, "_grad_func"):
         continue
 
-      #print("op", op)
-      #print("input_list", op._input_list)
-      #print("grad_tensors", grad_tensors)
-      #grad_tensor_list = op._grad_func(grad_tensors)
-      #print("grad_tensor_list", grad_tensor_list)
-      #print("\n" * 5)
-
       for (op, tensor_index), grad_tensor in zip(
-          op._input_list, 
-          #grad_tensor_list
+          op._input_list,
           op._grad_func(grad_tensors)
         ):
         if op not in grad_accumulate:
           grad_accumulate[op] = defaultdict(list)
         grad_accumulate[op][tensor_index].append(grad_tensor)
 
-        #if all(len(op._consumers[k]) == len(grad_accumulate[op][k]) for k in op._consumers.keys()):
-        if True:
+        if all(
+            consumers[op][k] == len(grad_accumulate[op][k])
+            for k in consumers[op].keys()
+          ):
           grad_tensors = []
           for k in sorted(grad_accumulate[op].keys()):
             if len(grad_accumulate[op][k]) > 1:
-              grad_tensors.append(
-                  (AddN(input_list=grad_accumulate[op][k], graph=self._graph), 0)
-            )
+              grad_tensor = (
+                  AddN(input_list=grad_accumulate[op][k], graph=self._graph), 0
+              )
             else:
-              grad_tensors.append(grad_accumulate[op][k][0])
+              grad_tensor = grad_accumulate[op][k][0]
+
+            grad_tensors.append(grad_tensor)
+            grad_accumulate[op][k] = grad_tensor
           queue.append((op, grad_tensors))
 
-    return grad_accumulate
-
+    return grad_accumulate, consumers
 
   @property
   def name(self):

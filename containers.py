@@ -21,7 +21,7 @@ OpInfo = collections.namedtuple("OpInfo", ["id", "op", "type", "name"])
 
 def get_default_graph():
   if not len(_DEFAULT_GRAPH_STACK):
-    _DEFAULT_GRAPH_STACK.append(Graph())
+    _push_graph(Graph())
   graph = _DEFAULT_GRAPH_STACK[-1]
   return graph
 

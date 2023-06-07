@@ -50,7 +50,7 @@ class Gather(Operation):
 
   def _grad_func(self, in_grad_tensors):
     from array_ops import Slice, Concat, Fill
-    from arithmetic_ops import Sub
+    from math_ops import Sub
 
     with self._graph.as_default_graph():
       ds = DynamicStitch(
@@ -112,7 +112,7 @@ class BroadcastTo(Operation):
     return outputs
 
   def _grad_func(self, in_grad_tensors):
-    from arithmetic_ops import BroadcastGradientArgs, Sum
+    from math_ops import BroadcastGradientArgs, Sum
     from array_ops import Reshape
 
     with self._graph.as_default_graph():
@@ -138,8 +138,7 @@ class Select(Operation):
     return outputs
 
   def _grad_func(self, in_grad_tensors):
-    from arithmetic_ops import BroadcastGradientArgs
-    from math_ops import Sum
+    from math_ops import Sum, BroadcastGradientArgs
     from array_ops import Reshape
 
     with self._graph.as_default_graph():

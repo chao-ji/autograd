@@ -956,7 +956,7 @@ class SigmoidGrad(Operation):
     return outputs_inputs_grads
 
   def _grad_func(self, in_grad_tensors):
-    from arithmetic_ops import Mul, Sub
+    from math_ops import Mul, Sub
 
     with self._graph.as_default_graph():
       mul = Mul(input_list=[in_grad_tensors[0], self._input_list[1]])
@@ -992,7 +992,7 @@ class TanhGrad(Operation):
     return outputs_inputs_grads    
 
   def _grad_func(self, in_grad_tensors):
-    from arithmetic_ops import Mul
+    from math_ops import Mul
 
     with self._graph.as_default_graph():
       mul = Mul(
@@ -1045,8 +1045,7 @@ class SoftmaxCrossEntropyWithLogits(Operation):
 
   def _grad_func(self, in_grad_tensors):
     from array_ops import ExpandDims, Squeeze
-    from arithmetic_ops import Mul, Sub, Neg, Add
-    from math_ops import BatchMatMul
+    from math_ops import BatchMatMul, Mul, Sub, Neg, Add
 
     with self._graph.as_default_graph():
       softmax = Softmax(input_list=[self._input_list[0]])
@@ -1093,8 +1092,7 @@ class LogSoftmax(Operation):
     return outputs
 
   def _grad_func(self, in_grad_tensors):
-    from math_ops import Exp, Sum
-    from arithmetic_ops import Mul, Sub
+    from math_ops import Exp, Sum, Mul, Sub
 
     with self._graph.as_default_graph():
       exp = Exp(input_list=[(self, 0)])  
@@ -1118,8 +1116,7 @@ class Softmax(Operation):
     return softmax
 
   def _grad_func(self, in_grad_tensors):
-    from arithmetic_ops import Mul, Sub
-    from math_ops import Sum
+    from math_ops import Sum, Mul, Sub
 
     with self._graph.as_default_graph(): 
       mul = Mul(input_list=[in_grad_tensors[0], (self, 0)])

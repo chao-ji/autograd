@@ -959,8 +959,45 @@ class Log1p(Operation):
     return outputs
 
   def _grad_func(self, in_grad_tensors):
-    pass
+    with self._graph.as_default_graph():
+      add = Add(
+          input_list=[
+              (Const(value=np.asarray(1)), 0),
+              self._input_list[0],         
+          ]
+      )
+      reciprocal = Reciprocal(input_list=[(add, 0)])
+      bp_inputs = Mul(input_list=[(reciprocal, 0), in_grad_tensors[0]]) 
+      out_grad_tensors = [(bp_inputs, 0)]
+    return out_grad_tensors
 
 
 class Reciprocal(Operation):
-  pass
+  def _run(self, inputs):
+    outputs = np.divide(1, inputs) 
+    return outputs
+
+  def _grad_func(self, in_grad_tensors):
+    with self._graph.as_default_graph():
+      bp_inputs = ReciprocalGrad(input_list=[(self, 0), in_grad_tensors[0]])
+      out_grad_tensors = [(bp_inputs, 0)]
+    return out_grad_tensors
+
+
+class ReciprocalGrad(Operation):
+  def _run(self, outputs, grads):
+    outputs_inputs_grads = grads * np.negative(np.multiply(outputs, outputs))
+    return outputs_inputs_grads
+
+  def _grad_func(self, in_grad_tensors):
+    with self._graph.as_default_graph():
+      mul = Mul(
+          input_list=[in_grad_tensors[0], (Const(value=np.asarray(-2)), 0)]
+      ) 
+      mul1 = Mul(input_list=[(mul, 0), self._input_list[1]])
+      bp_outputs = Mul(input_list=[(mul1, 0), self._input_list[0]])
+      bp_grads = ReciprocalGrad(
+          input_list=[self._input_list[0], in_grad_tensors[0]]
+      )
+      out_grad_tensors = [(bp_outputs, 0), (bp_grads, 0)]
+    return out_grad_tensors

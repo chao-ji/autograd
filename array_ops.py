@@ -220,7 +220,7 @@ class Slice(Operation):
     return outputs
 
   def _grad_func(self, in_grad_tensors):
-    from arithmetic_ops import Sub
+    from math_ops import Sub
 
     with self._graph.as_default_graph():
 
@@ -260,7 +260,7 @@ class Concat(Operation):
     return outputs
 
   def _grad_func(self, in_grad_tensors):
-    from arithmetic_ops import FloorMod
+    from math_ops import FloorMod
     
     with self._graph.as_default_graph():
       shapes = [
