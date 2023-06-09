@@ -3,9 +3,11 @@ import numpy as np
 
 from operation import Operation
 from origin_ops import Const
+from tensor import Tensor
 
 
 class DynamicStitch(Operation):
+
   def __init__(self, input_list, graph=None, accumulate=False, name=None):
     super(DynamicStitch, self).__init__(
         graph=graph, name=name, input_list=input_list
@@ -38,8 +40,14 @@ class DynamicStitch(Operation):
           zip(self._input_list[:size], in_grad_tensors * size)
         ):
         bp_data = Gather(input_list=[params, indices])
-        out_grad_tensors.append((bp_data, 0))
+        out_grad_tensors.append(Tensor(bp_data, 0))
+
     return out_grad_tensors
+
+  def _get_bp_indices(self):
+    size = len(self._input_list) // 2
+    bp_indices = set(range(size, size * 2))
+    return bp_indices
 
 
 class Gather(Operation):
@@ -59,44 +67,48 @@ class Gather(Operation):
       )
 
       slice0 = Slice(input_list=[
-          (ds.get_shape_op(tensor_index=0), 0),
-          (Const(value=np.asarray([0])), 0),
-          (Const(value=np.asarray([1])), 0)
+          Tensor(ds.get_shape_op(tensor_index=0), 0),
+          Tensor(Const(value=np.asarray([0])), 0),
+          Tensor(Const(value=np.asarray([1])), 0)
         ])
 
-      op, tensor_index = self._input_list[0]
+      op, tensor_index = self._input_list[0].op, self._input_list[0].tensor_index
       slice1 = Slice(input_list=[
-          (op.get_shape_op(tensor_index=tensor_index), 0),
-          (Const(value=np.asarray([0])), 0),
-          (Const(value=np.asarray([1])), 0)
+          Tensor(op.get_shape_op(tensor_index=tensor_index), 0),
+          Tensor(Const(value=np.asarray([0])), 0),
+          Tensor(Const(value=np.asarray([1])), 0)
         ])
 
-      sub = Sub(input_list=[(slice1, 0), (slice0, 0)]) 
+      sub = Sub(input_list=[Tensor(slice1, 0), Tensor(slice0, 0)]) 
 
       slice2 = Slice(input_list=[
-          (ds.get_shape_op(tensor_index=0), 0),
-          (Const(value=np.asarray([1])), 0),
-          (Const(value=np.asarray([-1])), 0)
+          Tensor(ds.get_shape_op(tensor_index=0), 0),
+          Tensor(Const(value=np.asarray([1])), 0),
+          Tensor(Const(value=np.asarray([-1])), 0)
         ])
 
-      shape = Concat(input_list=[(
-          Const(value=np.asarray(0)), 0),
-          (sub, 0),
-          (slice2, 0)
+      shape = Concat(input_list=[
+          Tensor(Const(value=np.asarray(0)), 0),
+          Tensor(sub, 0),
+          Tensor(slice2, 0)
         ])
   
       fill = Fill(input_list=[
-          (shape, 0),
-          (Const(value=np.asarray(0)), 0)])
+          Tensor(shape, 0),
+          Tensor(Const(value=np.asarray(0)), 0)
+        ]
+      )
 
       concat = Concat(input_list=[
-          (Const(value=np.asarray(0)), 0),
-          (ds, 0),
-          (fill, 0)]
+          Tensor(Const(value=np.asarray(0)), 0),
+          Tensor(ds, 0),
+          Tensor(fill, 0)]
       )
-      out_grad_tensors = [(concat, 0)]
+      out_grad_tensors = [Tensor(concat, 0)]
     return out_grad_tensors
 
+  def _get_bp_indices(self):
+    return set([0])
 
 
 class BroadcastTo(Operation):
@@ -116,19 +128,21 @@ class BroadcastTo(Operation):
     from array_ops import Reshape
 
     with self._graph.as_default_graph():
-      op, tensor_index = self._input_list[0]
+      op, tensor_index = self._input_list[0].op, self._input_list[0].tensor_index
       shape = op.get_shape_op(tensor_index=tensor_index)
 
       bga = BroadcastGradientArgs(
-          input_list=[(shape, 0), self._input_list[1]],
+          input_list=[Tensor(shape, 0), self._input_list[1]],
       )
-      sum0 = Sum(input_list=[in_grad_tensors[0], (bga, 0)])
+      sum0 = Sum(input_list=[in_grad_tensors[0], Tensor(bga, 0)])
 
-      bp_inputs = Reshape(input_list=[(sum0, 0), (shape, 0)])
-      out_grad_tensors = [(bp_inputs, 0)]
+      bp_inputs = Reshape(input_list=[Tensor(sum0, 0), Tensor(shape, 0)])
+      out_grad_tensors = [Tensor(bp_inputs, 0)]
 
     return out_grad_tensors
 
+  def _get_bp_indices(self):
+    return set([0])
 
 
 class Select(Operation):
@@ -142,8 +156,11 @@ class Select(Operation):
     from array_ops import Reshape
 
     with self._graph.as_default_graph():
-      op_x, tensor_index_x = self._input_list[1]
-      op_y, tensor_index_y = self._input_list[2]
+
+      op_x = self._input_list[1].op
+      tensor_index_x = self._input_list[1].tensor_index
+      op_y = self._input_list[2].op
+      tensor_index_y = self._input_list[2].tensor_index
 
       shape = op_x.get_shape_op(tensor_index=tensor_index_x)
       shape1 = op_y.get_shape_op(tensor_index=tensor_index_y)
@@ -152,22 +169,24 @@ class Select(Operation):
           input_list=[
               self._input_list[0],
               in_grad_tensors[0],
-              (Const(value=np.asarray(0)), 0)
+              Tensor(Const(value=np.asarray(0)), 0)
           ]
       )
       select1 = Select(
           input_list=[
               self._input_list[0],
-              (Const(value=np.asarray(0)), 0),
+              Tensor(Const(value=np.asarray(0)), 0),
               in_grad_tensors[0]
           ]
       )
-      bga = BroadcastGradientArgs(input_list=[(shape, 0), (shape2, 0)])
-      bga1 = BroadcastGradientArgs(input_list=[(shape1, 0), (shape2, 0)])
-      sum0 = Sum(input_list=[(select, 0), (bga, 0)])
-      sum1 = Sum(input_list=[(select1, 0), (bga1, 0)])
-      bp_x = Reshape(input_list=[(sum0, 0), (shape, 0)])
-      bp_y = Reshape(input_list=[(sum1, 0), (shape1, 0)]) 
-      out_grad_tensors = [(bp_x, 0), (bp_y, 0)]
+      bga = BroadcastGradientArgs(input_list=[Tensor(shape, 0), Tensor(shape2, 0)])
+      bga1 = BroadcastGradientArgs(input_list=[Tensor(shape1, 0), Tensor(shape2, 0)])
+      sum0 = Sum(input_list=[Tensor(select, 0), Tensor(bga, 0)])
+      sum1 = Sum(input_list=[Tensor(select1, 0), Tensor(bga1, 0)])
+      bp_x = Reshape(input_list=[Tensor(sum0, 0), Tensor(shape, 0)])
+      bp_y = Reshape(input_list=[Tensor(sum1, 0), Tensor(shape1, 0)]) 
+      out_grad_tensors = [Tensor(bp_x, 0), Tensor(bp_y, 0)]
     return out_grad_tensors
- 
+
+  def _get_bp_indices(self):
+    return set([1, 2]) 

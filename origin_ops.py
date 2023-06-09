@@ -1,5 +1,6 @@
 from operation import Operation
 
+
 class Const(Operation):
   def __init__(self, value, graph=None, name=None):
     super(Const, self).__init__(graph=graph, name=name)

@@ -1,22 +1,12 @@
 
 import collections
-import warnings
+import logging 
 import contextlib
 
 from default_stack import _DEFAULT_GRAPH_STACK #, _DEFAULT_NAME_SCOPE_STACK
 
 
 OpInfo = collections.namedtuple("OpInfo", ["id", "op", "type", "name"])
-
-
-#def _push_name_scope(name):
-#  current = _DEFAULT_NAME_SCOPE_STACK[-1]
-#  _DEFAULT_NAME_SCOPE_STACK.append(name) 
-     
-
-#def _pop_name_scope():
-#  name_scope = _DEFAULT_NAME_SCOPE_STACK.pop()
-
 
 
 def get_default_graph():
@@ -79,7 +69,7 @@ class Graph(object):
     if name is not None:
       if name in self._ops:
         new_name = self._get_type_based_name(type_name)
-        warnings.warn(f"Op name {name} already used. Ranmed to {new_name}.")
+        logging.warning(f"Op name {name} already used. Renamed to {new_name}.")
     else:
       name = self._get_type_based_name(type_name)
     self._op_type_count[type_name] += 1
