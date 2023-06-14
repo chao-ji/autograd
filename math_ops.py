@@ -52,10 +52,6 @@ class Add(Operation):
       sum1 = Sum(
           input_list=[in_grad_tensors[0], Tensor(bga, 1)]
       )
-      print("sum0", sum0.id, in_grad_tensors[0].op)
-      print("sum1", sum1.id, in_grad_tensors[0].op)
-
-
       bp_x = Reshape(
           input_list=[Tensor(sum0, 0), Tensor(shape, 0)]
       )

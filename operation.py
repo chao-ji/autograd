@@ -26,17 +26,7 @@ class Operation(object):
     self._graph = get_default_graph() if graph is None else graph
     self._input_list = input_list
     self._graph.add_op(op=self, name=name)
-
-    # dict: {tensor_index: list of ops}
-    # mapping the index `tensor_index` of each output tensor to a list of ops
-    # that will backprop gradients to the `tensor_index`-th tensor 
-    self._bp_consumers = defaultdict(list)
-
     self._bp_indices = self._get_bp_indices()
-    #print("      ", self.type, self._bp_indices, hasattr(self, "_grad_func"))
-
-    for tensor in [input_list[bp_index] for bp_index in self._bp_indices]:
-      tensor.op._bp_consumers[tensor.tensor_index].append(self)
 
   def _get_bp_indices(self):
     if not hasattr(self, "_grad_func"):
@@ -72,19 +62,19 @@ class Operation(object):
     else:
       self._graph._runtime._values[self.id].append(outputs)
 
-  def _record_consumer_count(self):
+  def _compute_expected_backprops(self):
     queue = [self]
-    bp_consumers = dict()
+    expected_backprops = dict()
     while len(queue):
       op = queue.pop(0)
-      bp_consumers[op] = {
-          tensor_index: len(op._bp_consumers[tensor_index])
-              for tensor_index in op._bp_consumers
-      }
-      for tensor in op._input_list:
-        if tensor.op not in bp_consumers:
-          queue.append(tensor.op)
-    return bp_consumers
+      for bp_index in op._bp_indices:
+        tensor = op._input_list[bp_index]
+        if tensor.op.id not in expected_backprops:
+          expected_backprops[tensor.op.id] = defaultdict(set)
+        expected_backprops[tensor.op.id][tensor.tensor_index].add(op.id)
+        queue.append(tensor.op)
+
+    return expected_backprops
 
   def backprop(self, grad_tensors):
     """
@@ -93,21 +83,9 @@ class Operation(object):
     """
     from math_ops import AddN 
 
-    consumers = self._record_consumer_count() 
-    grad_accumulate = dict() # {op: {tensor_index: [list of received grad tensors]}}
+    expected_backprops = self._compute_expected_backprops()
 
-
-
-
-    #grad_accumulate[self] = defaultdict(
-    #    list, {index:
-    #        grad_tensor for index, grad_tensor in enumerate(grad_tensors)
-    #    }
-    #)
-
-
-
-
+    grad_accumulate = dict() # {op.id: {tensor_index: [list of received grad tensors]}}
 
     queue = [(self, grad_tensors)]    # list of (op, list of tensors)
     while len(queue):
@@ -115,8 +93,6 @@ class Operation(object):
 
       if not hasattr(op, "_grad_func"):
         continue
-
-      #for (tensor, grad_tensor) in zip(op._input_list, op._grad_func(grad_tensors)):
 
       la = [op._input_list[bp_index] for bp_index in op._bp_indices]
       lb = op._grad_func(grad_tensors)
@@ -131,23 +107,10 @@ class Operation(object):
           grad_accumulate[op.id] = defaultdict(list)
         grad_accumulate[op.id][tensor_index].append(grad_tensor)
 
-
-
-        #if op.id == 35:
-        print(op)
-        print(consumers[op].keys())
-        for k in consumers[op].keys():
-          print(consumers[op][k])#, grad_accumulate[op][k])
-        print()
-
-
-
         if all(
-            consumers[op][k] == len(grad_accumulate[op.id][k])
-            for k in consumers[op].keys()
+            len(expected_backprops[op.id][k]) == len(grad_accumulate[op.id][k])
+            for k in expected_backprops[op.id].keys()
           ):
-          #print(op)
-          #print("aaaaaa")
           grad_tensors = []
           for k in sorted(grad_accumulate[op.id].keys()):
             if len(grad_accumulate[op.id][k]) > 1:
@@ -161,7 +124,7 @@ class Operation(object):
             grad_accumulate[op.id][k] = [grad_tensor]
           queue.append((op, grad_tensors))
 
-    return grad_accumulate, consumers
+    return grad_accumulate, expected_backprops
 
   @property
   def name(self):

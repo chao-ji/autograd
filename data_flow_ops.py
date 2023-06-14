@@ -66,8 +66,10 @@ class Gather(Operation):
           input_list=[self._input_list[1], in_grad_tensors[0]]
       )
 
+      shape = ds.get_shape_op(tensor_index=0)
+
       slice0 = Slice(input_list=[
-          Tensor(ds.get_shape_op(tensor_index=0), 0),
+          Tensor(shape, 0),
           Tensor(Const(value=np.asarray([0])), 0),
           Tensor(Const(value=np.asarray([1])), 0)
         ])
@@ -82,7 +84,7 @@ class Gather(Operation):
       sub = Sub(input_list=[Tensor(slice1, 0), Tensor(slice0, 0)]) 
 
       slice2 = Slice(input_list=[
-          Tensor(ds.get_shape_op(tensor_index=0), 0),
+          Tensor(shape, 0),
           Tensor(Const(value=np.asarray([1])), 0),
           Tensor(Const(value=np.asarray([-1])), 0)
         ])
@@ -190,3 +192,9 @@ class Select(Operation):
 
   def _get_bp_indices(self):
     return [1, 2]
+
+
+class StopGradient(Operation):
+  def _run(self, inputs):
+    outputs = inputs
+    return outputs
