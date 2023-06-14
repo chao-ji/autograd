@@ -65,44 +65,46 @@ class Gather(Operation):
           accumulate=True,
           input_list=[self._input_list[1], in_grad_tensors[0]]
       )
-
-      shape = ds.get_shape_op(tensor_index=0)
+      shape_tensor = ds.get_shape_op(tensor_index=0)
+      zero_array_tensor = Tensor(Const(value=np.asarray([0])), 0)
+      one_array_tensor = Tensor(Const(value=np.asarray([1])), 0)
+      zero_scalar_tensor = Tensor(Const(value=np.asarray(0)), 0)
 
       slice0 = Slice(input_list=[
-          Tensor(shape, 0),
-          Tensor(Const(value=np.asarray([0])), 0),
-          Tensor(Const(value=np.asarray([1])), 0)
+          shape_tensor,
+          zero_array_tensor,
+          one_array_tensor
         ])
 
       op, tensor_index = self._input_list[0].op, self._input_list[0].tensor_index
       slice1 = Slice(input_list=[
-          Tensor(op.get_shape_op(tensor_index=tensor_index), 0),
-          Tensor(Const(value=np.asarray([0])), 0),
-          Tensor(Const(value=np.asarray([1])), 0)
+          op.get_shape_op(tensor_index=tensor_index),
+          zero_array_tensor,
+          one_array_tensor
         ])
 
       sub = Sub(input_list=[Tensor(slice1, 0), Tensor(slice0, 0)]) 
 
       slice2 = Slice(input_list=[
-          Tensor(shape, 0),
-          Tensor(Const(value=np.asarray([1])), 0),
+          shape_tensor,
+          one_array_tensor,
           Tensor(Const(value=np.asarray([-1])), 0)
         ])
 
       shape = Concat(input_list=[
-          Tensor(Const(value=np.asarray(0)), 0),
+          zero_scalar_tensor,
           Tensor(sub, 0),
           Tensor(slice2, 0)
         ])
   
       fill = Fill(input_list=[
           Tensor(shape, 0),
-          Tensor(Const(value=np.asarray(0)), 0)
+          zero_scalar_tensor
         ]
       )
 
       concat = Concat(input_list=[
-          Tensor(Const(value=np.asarray(0)), 0),
+          zero_scalar_tensor,
           Tensor(ds, 0),
           Tensor(fill, 0)]
       )
@@ -131,14 +133,16 @@ class BroadcastTo(Operation):
 
     with self._graph.as_default_graph():
       op, tensor_index = self._input_list[0].op, self._input_list[0].tensor_index
-      shape = op.get_shape_op(tensor_index=tensor_index)
+      shape_tensor = op.get_shape_op(tensor_index=tensor_index)
 
       bga = BroadcastGradientArgs(
-          input_list=[Tensor(shape, 0), self._input_list[1]],
+          input_list=[shape_tensor,
+                      self._input_list[1]
+          ],
       )
       sum0 = Sum(input_list=[in_grad_tensors[0], Tensor(bga, 0)])
 
-      bp_inputs = Reshape(input_list=[Tensor(sum0, 0), Tensor(shape, 0)])
+      bp_inputs = Reshape(input_list=[Tensor(sum0, 0), shape_tensor])
       out_grad_tensors = [Tensor(bp_inputs, 0)]
 
     return out_grad_tensors
@@ -164,9 +168,9 @@ class Select(Operation):
       op_y = self._input_list[2].op
       tensor_index_y = self._input_list[2].tensor_index
 
-      shape = op_x.get_shape_op(tensor_index=tensor_index_x)
-      shape1 = op_y.get_shape_op(tensor_index=tensor_index_y)
-      shape2 = self.get_shape_op(tensor_index=0)
+      shape_tensor = op_x.get_shape_op(tensor_index=tensor_index_x)
+      shape1_tensor = op_y.get_shape_op(tensor_index=tensor_index_y)
+      shape2_tensor = self.get_shape_op(tensor_index=0)
       select = Select(
           input_list=[
               self._input_list[0],
@@ -181,12 +185,12 @@ class Select(Operation):
               in_grad_tensors[0]
           ]
       )
-      bga = BroadcastGradientArgs(input_list=[Tensor(shape, 0), Tensor(shape2, 0)])
-      bga1 = BroadcastGradientArgs(input_list=[Tensor(shape1, 0), Tensor(shape2, 0)])
+      bga = BroadcastGradientArgs(input_list=[shape_tensor, shape2_tensor])
+      bga1 = BroadcastGradientArgs(input_list=[shape1_tensor, shape2_tensor])
       sum0 = Sum(input_list=[Tensor(select, 0), Tensor(bga, 0)])
       sum1 = Sum(input_list=[Tensor(select1, 0), Tensor(bga1, 0)])
-      bp_x = Reshape(input_list=[Tensor(sum0, 0), Tensor(shape, 0)])
-      bp_y = Reshape(input_list=[Tensor(sum1, 0), Tensor(shape1, 0)]) 
+      bp_x = Reshape(input_list=[Tensor(sum0, 0), shape_tensor])
+      bp_y = Reshape(input_list=[Tensor(sum1, 0), shape1_tensor]) 
       out_grad_tensors = [Tensor(bp_x, 0), Tensor(bp_y, 0)]
     return out_grad_tensors
 

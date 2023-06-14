@@ -138,6 +138,10 @@ class Operation(object):
   def id(self):
     return self._id
 
+  @property
+  def num_outputs(self):
+    return 1
+
   def get_shape_op(self, tensor_index=0):
     """Create the `Shape` op for one of the output tensor of this op.
 
@@ -150,36 +154,36 @@ class Operation(object):
     """
     tensor = Tensor(self, tensor_index)
     if tensor not in self._graph._shape_ops:
-      shape_op = Shape(input_list=[tensor], name=self.name+"_Shape")
-      self._graph._shape_ops[tensor] = shape_op
+      shape_tensor = Tensor(Shape(input_list=[tensor], name=self.name+"_Shape"), 0)
+      self._graph._shape_ops[tensor] = shape_tensor
     return self._graph._shape_ops[tensor]
 
   def get_size_op(self, tensor_index=0):
     tensor = Tensor(self, tensor_index)
     if tensor not in self._graph._size_ops:
-      size_op = Size(input_list=[tensor], name=self.name+"_Size")
-      self._graph._size_ops[tensor] = size_op
+      size_tensor = Tensor(Size(input_list=[tensor], name=self.name+"_Size"), 0)
+      self._graph._size_ops[tensor] = size_tensor
     return self._graph._size_ops[tensor]
 
   def get_rank_op(self, tensor_index=0):
     tensor = Tensor(self, tensor_index)
     if tensor not in self._graph._rank_ops:
-      rank_op = Rank(input_list=[tensor], name=self.name+"_Rank")
-      self._graph._rank_ops[tensor] = rank_op
+      rank_tensor = Tensor(Rank(input_list=[tensor], name=self.name+"_Rank"), 0)
+      self._graph._rank_ops[tensor] = rank_tensor
     return self._graph._rank_ops[tensor]
 
   def get_zeros_op(self, tensor_index=0):
     tensor = Tensor(self, tensor_index)
     if tensor not in self._graph._zeros_ops:
-      zeros_op = ZerosLike(input_list=[tensor], name=self.name+"_Zeros")
-      self._graph._zeros_ops[tensor] = zeros_op
+      zeros_tensor = Tensor(ZerosLike(input_list=[tensor], name=self.name+"_Zeros"), 0)
+      self._graph._zeros_ops[tensor] = zeros_tensor
     return self._graph._zeros_ops[tensor]
 
   def get_ones_op(self, tensor_index=0):
     tensor = Tensor(self, tensor_index)
     if tensor not in self._graph._ones_ops:
-      ones_op = OnesLike(input_list=[tensor], name=self.name+"_Ones")
-      self._graph._ones_ops[tensor] = ones_op
+      ones_tensor = Tensor(OnesLike(input_list=[tensor], name=self.name+"_Ones"), 0)
+      self._graph._ones_ops[tensor] = ones_tensor
     return self._graph._ones_ops[tensor]
 
 
