@@ -52,6 +52,9 @@ class Add(Operation):
       sum1 = Sum(
           input_list=[in_grad_tensors[0], Tensor(bga, 1)]
       )
+      print("sum0", sum0.id, in_grad_tensors[0].op)
+      print("sum1", sum1.id, in_grad_tensors[0].op)
+
 
       bp_x = Reshape(
           input_list=[Tensor(sum0, 0), Tensor(shape, 0)]
@@ -419,16 +422,14 @@ class AddN(Operation):
   """AddN"""
 
   def _run(self, *input_tensor_values):
-    self._num = len(input_tensor_values)
-
     outputs = input_tensor_values[0]
     for tensor_value in input_tensor_values[1:]:
       outputs = np.add(outputs, tensor_value)
     return outputs
 
-  def _grad_fun(self, in_grad_tensors):
+  def _grad_func(self, in_grad_tensors):
     with self._graph.as_default_graph():
-      out_grad_tensors = in_grad_tensors * self._num
+      out_grad_tensors = [in_grad_tensors[0] for _ in range(len(self._input_list))]#in_grad_tensors * len(self._input_list)
 
     return out_grad_tensors
 
@@ -507,7 +508,7 @@ class Mean(Operation):
     return out_grad_tensors
 
   def _get_bp_indices(self):
-    return set([0])
+    return [0]
 
 
 class Sum(Operation):
@@ -558,7 +559,7 @@ class Sum(Operation):
     return out_grad_tensors
 
   def _get_bp_indices(self):
-    return set([0])
+    return [0]
 
 
 class Prod(Operation):
@@ -654,7 +655,7 @@ class Prod(Operation):
     return out_grad_tensors
 
   def _get_bp_indices(self):
-    return set([0])
+    return [0]
 
 
 class MatMul(Operation):
@@ -954,7 +955,7 @@ class Cumsum(Operation):
     return out_grad_tensors
 
   def _get_bp_indices(self):
-    return set([0])
+    return [0]
 
 
 class Cumprod(Operation):
@@ -1012,7 +1013,7 @@ class Cumprod(Operation):
     return out_grad_tensors
 
   def _get_bp_indices(self):
-    return set([0])
+    return [0]
 
 
 class Exp(Operation):

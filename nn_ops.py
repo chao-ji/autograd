@@ -438,7 +438,7 @@ class Conv2DBackpropInput(_Filters2DBase):
     return out_grad_tensors
 
   def _get_bp_indices(self):
-    return set([0, 1])
+    return [0, 1]
 
 
 class Conv2DBackpropFilter(_Filters2DBase):
@@ -501,7 +501,7 @@ class Conv2DBackpropFilter(_Filters2DBase):
     return out_grad_tensors
 
   def _get_bp_indices(self):
-    return set([0, 1])
+    return [0, 1]
 
 
 class _Pooling2DBase(_Filters2DBase):
@@ -867,7 +867,7 @@ class AvgPool2DGrad(_Pooling2DBase):
     return out_grad_tensors
 
   def _get_bp_indices(self):
-    return set([0])
+    return [0]
 
 
 class FusedBatchNorm(Operation):

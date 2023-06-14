@@ -108,7 +108,7 @@ class Gather(Operation):
     return out_grad_tensors
 
   def _get_bp_indices(self):
-    return set([0])
+    return [0]
 
 
 class BroadcastTo(Operation):
@@ -142,7 +142,7 @@ class BroadcastTo(Operation):
     return out_grad_tensors
 
   def _get_bp_indices(self):
-    return set([0])
+    return [0]
 
 
 class Select(Operation):
@@ -189,4 +189,4 @@ class Select(Operation):
     return out_grad_tensors
 
   def _get_bp_indices(self):
-    return set([1, 2]) 
+    return [1, 2]

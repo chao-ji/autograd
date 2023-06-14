@@ -27,7 +27,7 @@ class Reshape(Operation):
     return out_grad_tensors
 
   def _get_bp_indices(self):
-    return set([0])
+    return [0]
 
 
 class Transpose(Operation):
@@ -44,7 +44,7 @@ class Transpose(Operation):
     return out_grad_tensors
 
   def _get_bp_indices(self):
-    return set([0])
+    return [0]
 
 
 class InvertPermutation(Operation):
@@ -66,7 +66,6 @@ class Pack(Operation):
   def __init__(self, axis, input_list, graph=None, name=None):
     super(Pack, self).__init__(graph=graph, input_list=input_list, name=name)
     self._axis = axis
-    self._num = len(input_list)
 
   def _run(self, *input_tensor_values):
     outputs = np.stack(input_tensor_values, axis=self._axis)
@@ -75,7 +74,7 @@ class Pack(Operation):
   def _grad_func(self, in_grad_tensors):
     with self._graph.as_default_graph():
       bp_inputs = Unpack(axis=self._axis, input_list=[in_grad_tensors[0]])
-      out_grad_tensors = [Tensor(bp_inputs, i) for i in range(self._num)]
+      out_grad_tensors = [Tensor(bp_inputs, i) for i in range(len(self._input_list))]
     return out_grad_tensors
 
 
@@ -147,7 +146,7 @@ class Tile(Operation):
     return out_grad_tensors
 
   def _get_bp_indices(self):
-    return set([0])
+    return [0]
 
 
 class StridedSlice(Operation):
@@ -183,7 +182,7 @@ class StridedSlice(Operation):
     return out_grad_tensors
 
   def _get_bp_indices(self):
-    return set([0])
+    return [0]
 
 
 class StridedSliceGrad(Operation):
@@ -217,7 +216,7 @@ class StridedSliceGrad(Operation):
     return out_grad_tensors
 
   def _get_bp_indices(self):
-    return set([4])
+    return [4]
 
 
 class Slice(Operation):
@@ -280,7 +279,7 @@ class Slice(Operation):
     return out_grad_tensors
 
   def _get_bp_indices(self):
-    return set([0])
+    return [0]
 
 
 class Concat(Operation):
@@ -315,7 +314,7 @@ class Concat(Operation):
     return out_grad_tensors
 
   def _get_bp_indices(self):
-    backprop_indices = set(range(1, len(self._input_list)))
+    backprop_indices = list(range(1, len(self._input_list)))
     return backprop_indices 
 
 
@@ -374,7 +373,7 @@ class Pad(Operation):
     return out_grad_tensors 
 
   def _get_bp_indices(self):
-    return set([0])
+    return [0]
 
 
 class ExpandDims(Operation):
@@ -395,7 +394,7 @@ class ExpandDims(Operation):
     return out_grad_tensors
 
   def _get_bp_indices(self):
-    return set([0])
+    return [0]
 
 
 class Squeeze(Operation):

@@ -1,5 +1,4 @@
-"""Operation 
-"""
+"""Defines base class `Operation` for all Ops and some generic Op types."""
 import numpy as np
 from collections import defaultdict
 
@@ -34,23 +33,21 @@ class Operation(object):
     self._bp_consumers = defaultdict(list)
 
     self._bp_indices = self._get_bp_indices()
-    for index, tensor in enumerate(input_list):
-      if index in self._bp_indices: 
-        tensor.op._bp_consumers[tensor.tensor_index].append(self)
+    #print("      ", self.type, self._bp_indices, hasattr(self, "_grad_func"))
+
+    for tensor in [input_list[bp_index] for bp_index in self._bp_indices]:
+      tensor.op._bp_consumers[tensor.tensor_index].append(self)
 
   def _get_bp_indices(self):
     if not hasattr(self, "_grad_func"):
-      bp_indices = set()
+      bp_indices = [] 
     else:
-      bp_indices = set(range(len(self._input_list)))
+      bp_indices = list(range(len(self._input_list)))
     return bp_indices
 
   def __repr__(self):
-    repstr = (
-        f"<Operation '{self._graph._ops[self].name}', "
-        f"type={self._graph._ops[self].type}, "
-        f"id={self._graph._ops[self].id}>"
-    )
+    name, type_, id_ = self._name, self._type, self._id
+    repstr = f"<Operation '{name}', type={type_}, id={id_}>"
     return repstr
 
   def run(self):
@@ -62,9 +59,8 @@ class Operation(object):
     # prepare the value of the input tensors of this op
     input_tensor_values = []
     for tensor in self._input_list:
-      op, tensor_index = tensor.op, tensor.tensor_index
-      op.run() # make sure all depending ops have been executed
-      value = self._graph._runtime._values[op.name][tensor_index]
+      tensor.op.run() # make sure all depending ops have been executed
+      value = self._graph._runtime.get_tensor_value(tensor)
       input_tensor_values.append(value)
 
     # run this op using the actual tensor values from depending ops
@@ -72,9 +68,9 @@ class Operation(object):
 
     # save the output tensor values from this op to the runtime
     if isinstance(outputs, (list, tuple)):
-      self._graph._runtime._values[self.name].extend(list(outputs))
+      self._graph._runtime._values[self.id].extend(list(outputs))
     else:
-      self._graph._runtime._values[self.name].append(outputs)
+      self._graph._runtime._values[self.id].append(outputs)
 
   def _record_consumer_count(self):
     queue = [self]
@@ -93,17 +89,25 @@ class Operation(object):
   def backprop(self, grad_tensors):
     """
     Args:
-      grad_tensors (List[Tensor]): 
+      grad_tensors (List[Tensor]): list of the same length as the output tensors of this op. 
     """
     from math_ops import AddN 
 
     consumers = self._record_consumer_count() 
     grad_accumulate = dict() # {op: {tensor_index: [list of received grad tensors]}}
-    grad_accumulate[self] = defaultdict(
-        list, {index:
-            grad_tensor for index, grad_tensor in enumerate(grad_tensors)
-        }
-    )
+
+
+
+
+    #grad_accumulate[self] = defaultdict(
+    #    list, {index:
+    #        grad_tensor for index, grad_tensor in enumerate(grad_tensors)
+    #    }
+    #)
+
+
+
+
 
     queue = [(self, grad_tensors)]    # list of (op, list of tensors)
     while len(queue):
@@ -112,46 +116,64 @@ class Operation(object):
       if not hasattr(op, "_grad_func"):
         continue
 
-      for tensor, grad_tensor in zip(
-          op._input_list,
-          op._grad_func(grad_tensors)
-        ):
+      #for (tensor, grad_tensor) in zip(op._input_list, op._grad_func(grad_tensors)):
+
+      la = [op._input_list[bp_index] for bp_index in op._bp_indices]
+      lb = op._grad_func(grad_tensors)
+      assert len(la) == len(lb)
+
+      for tensor, grad_tensor in zip(la, lb):
+
+
         op, tensor_index = tensor.op, tensor.tensor_index
 
-        if op not in grad_accumulate:
-          grad_accumulate[op] = defaultdict(list)
-        grad_accumulate[op][tensor_index].append(grad_tensor)
+        if op.id not in grad_accumulate:
+          grad_accumulate[op.id] = defaultdict(list)
+        grad_accumulate[op.id][tensor_index].append(grad_tensor)
+
+
+
+        #if op.id == 35:
+        print(op)
+        print(consumers[op].keys())
+        for k in consumers[op].keys():
+          print(consumers[op][k])#, grad_accumulate[op][k])
+        print()
+
+
 
         if all(
-            consumers[op][k] == len(grad_accumulate[op][k])
+            consumers[op][k] == len(grad_accumulate[op.id][k])
             for k in consumers[op].keys()
           ):
+          #print(op)
+          #print("aaaaaa")
           grad_tensors = []
-          for k in sorted(grad_accumulate[op].keys()):
-            if len(grad_accumulate[op][k]) > 1:
+          for k in sorted(grad_accumulate[op.id].keys()):
+            if len(grad_accumulate[op.id][k]) > 1:
               grad_tensor = Tensor(
-                  AddN(input_list=grad_accumulate[op][k], graph=self._graph), 0
+                  AddN(input_list=grad_accumulate[op.id][k], graph=self._graph), 0
               )
             else:
-              grad_tensor = grad_accumulate[op][k][0]
+              grad_tensor = grad_accumulate[op.id][k][0]
 
             grad_tensors.append(grad_tensor)
-            grad_accumulate[op][k] = grad_tensor
+            grad_accumulate[op.id][k] = [grad_tensor]
           queue.append((op, grad_tensors))
 
     return grad_accumulate, consumers
 
   @property
   def name(self):
-    return self._graph._ops[self].name
+    return self._name
 
   @property
   def type(self):
-    return self._graph._ops[self].type
+    return self._type
 
   @property
   def id(self):
-    return self._graph._ops[self].id 
+    return self._id
 
   def get_shape_op(self, tensor_index=0):
     """Create the `Shape` op for one of the output tensor of this op.
@@ -163,49 +185,39 @@ class Operation(object):
     Returns:
       shape_op (Operation): a `Shape` op.
     """
-    if (self, tensor_index) not in self._graph._shape_ops:
-      shape_op = Shape(
-          input_list=[Tensor(self, tensor_index)],
-          name=self.name+"_Shape"
-      )    
-      self._graph._shape_ops[(self, tensor_index)] = shape_op
-    return self._graph._shape_ops[(self, tensor_index)]
+    tensor = Tensor(self, tensor_index)
+    if tensor not in self._graph._shape_ops:
+      shape_op = Shape(input_list=[tensor], name=self.name+"_Shape")
+      self._graph._shape_ops[tensor] = shape_op
+    return self._graph._shape_ops[tensor]
 
   def get_size_op(self, tensor_index=0):
-    if (self, tensor_index) not in self._graph._size_ops:
-      size_op = Size(
-          input_list = [Tensor(self, tensor_index)],
-          name=self.name+"_Size"
-      )
-      self._graph._size_ops[(self, tensor_index)] = size_op
-    return self._graph._size_ops[(self, tensor_index)]
+    tensor = Tensor(self, tensor_index)
+    if tensor not in self._graph._size_ops:
+      size_op = Size(input_list=[tensor], name=self.name+"_Size")
+      self._graph._size_ops[tensor] = size_op
+    return self._graph._size_ops[tensor]
 
   def get_rank_op(self, tensor_index=0):
-    if (self, tensor_index) not in self._graph._rank_ops:
-      rank_op = Rank(
-          input_list = [Tensor(self, tensor_index)],
-          name=self.name+"_Rank"
-      )
-      self._graph._rank_ops[(self, tensor_index)] = rank_op
-    return self._graph._rank_ops[(self, tensor_index)]
+    tensor = Tensor(self, tensor_index)
+    if tensor not in self._graph._rank_ops:
+      rank_op = Rank(input_list=[tensor], name=self.name+"_Rank")
+      self._graph._rank_ops[tensor] = rank_op
+    return self._graph._rank_ops[tensor]
 
   def get_zeros_op(self, tensor_index=0):
-    if (self, tensor_index) not in self._graph._zeros_ops:
-      zeros_op = ZerosLike(
-          input_list=[Tensor(self, tensor_index)],
-          name=self.name+"_Zeros"
-      )
-      self._graph._zeros_ops[(self, tensor_index)] = zeros_op
-    return self._graph._zeros_ops[(self, tensor_index)]
+    tensor = Tensor(self, tensor_index)
+    if tensor not in self._graph._zeros_ops:
+      zeros_op = ZerosLike(input_list=[tensor], name=self.name+"_Zeros")
+      self._graph._zeros_ops[tensor] = zeros_op
+    return self._graph._zeros_ops[tensor]
 
   def get_ones_op(self, tensor_index=0):
-    if (self, tensor_index) not in self._graph._ones_ops:
-      ones_op = OnesLike(
-          input_list=[Tensor(self, tensor_index)],
-          name=self.name+"_Ones"
-      )
-      self._graph._ones_ops[(self, tensor_index)] = ones_op
-    return self._graph._ones_ops[(self, tensor_index)]
+    tensor = Tensor(self, tensor_index)
+    if tensor not in self._graph._ones_ops:
+      ones_op = OnesLike(input_list=[tensor], name=self.name+"_Ones")
+      self._graph._ones_ops[tensor] = ones_op
+    return self._graph._ones_ops[tensor]
 
 
 class Zeros(Operation):
@@ -246,6 +258,6 @@ class Size(Operation):
 
 class Rank(Operation):
   def _run(self, tensor_value):
-    outputs = np.asarray(len(tensor_value.shape), dtype="float32")
+    outputs = len(tensor_value.shape)
     return outputs
 

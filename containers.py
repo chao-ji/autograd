@@ -29,11 +29,10 @@ class Graph(object):
   def __init__(self):
     self._runtime = None
 
-    # dictionary that maps Operation to OpInfo
+    # dictionary that maps op ID (int) to Op 
     self._ops = dict()
     # dictionary that maps type name of Operation to its count
     self._op_type_count = collections.defaultdict(int)
-
 
     # maps tensor (op, tensor_index) to a `Shape` op
     self._shape_ops = dict()
@@ -47,13 +46,8 @@ class Graph(object):
     self._rank_ops = dict()
 
 
-    self._name_to_op = dict()
-
-    self._id_to_op = dict()
-
-
-  def get_op(self, name):
-    return self._name_to_op[name]
+  def get_op(self, id_):
+    return self._ops[id_]
 
   def _get_type_based_name(self, type_name):
     if type_name not in self._op_type_count:
@@ -63,19 +57,22 @@ class Graph(object):
     return new_name
 
   def add_op(self, op, name=None):
-    op_id = len(self._ops)
-    type_name = type(op).__name__
+    id_ = len(self._ops)
+    type_ = type(op).__name__
 
     if name is not None:
       if name in self._ops:
-        new_name = self._get_type_based_name(type_name)
+        new_name = self._get_type_based_name(type_)
         logging.warning(f"Op name {name} already used. Renamed to {new_name}.")
     else:
-      name = self._get_type_based_name(type_name)
-    self._op_type_count[type_name] += 1
-    self._ops[op] = OpInfo(id=op_id, op=op, type=type_name, name=name)
-    self._name_to_op[name] = OpInfo(id=op_id, op=op, type=type_name, name=name)
-    self._id_to_op[op_id] = OpInfo(id=op_id, op=op, type=type_name, name=name)
+      name = self._get_type_based_name(type_)
+    self._op_type_count[type_] += 1
+
+    op._id = id_
+    op._type = type_
+    op._name = name
+
+    self._ops[id_] = op
 
   @contextlib.contextmanager
   def as_default_graph(self):
@@ -90,4 +87,10 @@ class Runtime(object):
   def __init__(self):
     # map: OpName -> list of tensor values
     self._values = collections.defaultdict(list)
+
+  def get_tensor_value(self, tensor):
+    tensor_value = self._values[tensor.op.id][tensor.tensor_index]
+    return tensor_value
+
+
 
