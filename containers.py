@@ -35,15 +35,15 @@ class Graph(object):
     self._op_type_count = collections.defaultdict(int)
 
     # maps tensor (op, tensor_index) to a `Shape` op
-    self._shape_ops = dict()
+    self._shape_tensors = dict()
 
-    self._zeros_ops = dict()
+    self._zeroslike_tensors = dict()
 
-    self._ones_ops = dict()
+    self._oneslike_tensors = dict()
 
-    self._size_ops = dict()
+    self._size_tensors = dict()
 
-    self._rank_ops = dict()
+    self._rank_tensors = dict()
 
 
   def get_op(self, id_):

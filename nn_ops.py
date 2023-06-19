@@ -2,8 +2,7 @@
 import numpy as np
 
 from operation import Operation
-from origin_ops import Const
-from tensor import Tensor
+from generic_ops import Const
 
 
 class _Filters2DBase(Operation):
@@ -363,7 +362,7 @@ class Conv2D(_Filters2DBase):
           input_list=[
               self._input_list[1],
               in_grad_tensors[0],
-              Tensor(op.get_shape_op(tensor_index=tensor_index), 0)
+              op.get_shape_tensor(tensor_index=tensor_index)
           ]
       )
       op, tensor_index = self._input_list[1].op, self._input_list[1].tensor_index
@@ -373,10 +372,10 @@ class Conv2D(_Filters2DBase):
           input_list=[
               self._input_list[0],
               in_grad_tensors[0],
-              Tensor(op.get_shape_op(tensor_index=tensor_index), 0)
+              op.get_shape_tensor(tensor_index=tensor_index)
           ]
       )
-      out_grad_tensors = [Tensor(bp_inputs, 0), Tensor(bp_filters, 0)]
+      out_grad_tensors = [bp_inputs.output(0), bp_filters.output(0)]
     return out_grad_tensors
 
 
@@ -426,7 +425,7 @@ class Conv2DBackpropInput(_Filters2DBase):
           input_list=[
               in_grad_tensors[0],
               self._input_list[1],
-              Tensor(op.get_shape_op(tensor_index=tensor_index), 0)
+              op.get_shape_tensor(tensor_index=tensor_index)
           ]
       )
       bp_grads = Conv2D(
@@ -434,7 +433,7 @@ class Conv2DBackpropInput(_Filters2DBase):
           padding=self._padding,
           input_list=[in_grad_tensors[0], self._input_list[0]]
       )
-      out_grad_tensors = [Tensor(bp_filters, 0), Tensor(bp_grads, 0)]
+      out_grad_tensors = [bp_filters.output(0), bp_grads.output(0)]
     return out_grad_tensors
 
   def _get_bp_indices(self):
@@ -489,7 +488,7 @@ class Conv2DBackpropFilter(_Filters2DBase):
           input_list=[
               in_grad_tensors[0],
               self._input_list[1],
-              Tensor(op.get_shape_op(tensor_index=tensor_index), 0)
+              op.get_shape_tensor(tensor_index=tensor_index)
           ]
       )
       bp_grads = Conv2D(
@@ -497,7 +496,7 @@ class Conv2DBackpropFilter(_Filters2DBase):
           padding=self._padding,
           input_list=[self._input_list[0], in_grad_tensors[0]]
       )
-      out_grad_tensors = [Tensor(bp_inputs, 0), Tensor(bp_grads, 0)]
+      out_grad_tensors = [bp_inputs.output(0), bp_grads.output(0)]
     return out_grad_tensors
 
   def _get_bp_indices(self):
@@ -569,7 +568,7 @@ class MaxPool2D(_Pooling2DBase):
           padding=self._padding,
           input_list=[self._input_list[0], in_grad_tensors[0]]
       )
-      out_grad_tensors = [Tensor(maxpool2d_grads, 0)]
+      out_grad_tensors = [maxpool2d_grads.output(0)]
     return out_grad_tensors
 
 
@@ -633,7 +632,7 @@ class MaxPool2DGrad(_Pooling2DBase):
           padding=self._padding,
           input_list= [
               self._input_list[0],
-              Tensor(op.get_zeros_op(tensor_index=tensor_index), 0)
+              op.get_zeros_tensor(tensor_index=tensor_index),
           ]
       )
       bp_grads = MaxPool2DGradGrad(
@@ -643,7 +642,7 @@ class MaxPool2DGrad(_Pooling2DBase):
           input_list=[self._input_list[0], in_grad_tensors[0]]
       )
 
-      out_grad_tensors = [Tensor(bp_inputs, 0), Tensor(bp_grads, 0)]
+      out_grad_tensors = [bp_inputs.output(0), bp_grads.output(0)]
     return out_grad_tensors
 
 
@@ -707,7 +706,7 @@ class MaxPool2DGradGrad(_Pooling2DBase):
           padding=self._padding,
           input_list=[
               self._input_list[0],
-              Tensor(op.get_zeros_op(tensor_index=tensor_index), 0)
+              op.get_zeros_tensor(tensor_index=tensor_index),
           ]
       )
       bp_inputs_grads_grads = MaxPool2DGrad(
@@ -716,7 +715,7 @@ class MaxPool2DGradGrad(_Pooling2DBase):
           padding=self._padding,
           input_list=[self._input_list[0], in_grad_tensors[0]]
       )
-      out_grad_tensors = [Tensor(bp_inputs, 0), Tensor(bp_inputs_grads_grads, 0)]
+      out_grad_tensors = [bp_inputs.output(0), bp_inputs_grads_grads.output(0)]
 
     return out_grad_tensors
 
@@ -761,10 +760,10 @@ class AvgPool2D(_Pooling2DBase):
           padding=self._padding,
           input_list=[
               in_grad_tensors[0],
-              Tensor(op.get_shape_op(tensor_index=tensor_index), 0)
+              op.get_shape_tensor(tensor_index=tensor_index)
           ]
       )
-      out_grad_tensors = [Tensor(bp_inputs, 0)]
+      out_grad_tensors = [bp_inputs.output(0)]
     return out_grad_tensors
 
 
@@ -863,7 +862,7 @@ class AvgPool2DGrad(_Pooling2DBase):
           padding=self._padding,
           input_list=in_grad_tensors,
       )
-      out_grad_tensors = [Tensor(bp_grads, 0)]
+      out_grad_tensors = [bp_grads.output(0)]
     return out_grad_tensors
 
   def _get_bp_indices(self):
@@ -954,9 +953,9 @@ class Sigmoid(Operation):
   def _grad_func(self, in_grad_tensors):
     with self._graph.as_default_graph():
       bp_inputs = SigmoidGrad(
-          input_list=[Tensor(self, 0), in_grad_tensors[0]]
+          input_list=[self.output(0), in_grad_tensors[0]]
       )
-      out_grad_tensors = [Tensor(bp_inputs, 0)]
+      out_grad_tensors = [bp_inputs.output(0)]
     return out_grad_tensors
 
 
@@ -972,15 +971,15 @@ class SigmoidGrad(Operation):
       mul = Mul(input_list=[in_grad_tensors[0], self._input_list[1]])
       mul1 = Mul(
           input_list=[
-              Tensor(Const(value=np.asarray(2)), 0),
-              Tensor(mul, 0)
+              Const(value=np.asarray(2)).output(0),
+              mul.output(0)
         ]
       )
-      mul2 = Mul(input_list=[self._input_list[0], Tensor(mul1, 0)]) 
-      bp_outputs = Sub(input_list=[Tensor(mul, 0), Tensor(mul2, 0)])
+      mul2 = Mul(input_list=[self._input_list[0], mul1.output(0)]) 
+      bp_outputs = Sub(input_list=[mul.output(0), mul2.output(0)])
 
       bp_grads = SigmoidGrad(input_list=[self._input_list[0], in_grad_tensors[0]])
-    out_grad_tensors = [Tensor(bp_outputs, 0), Tensor(bp_grads, 0)]
+    out_grad_tensors = [bp_outputs.output(0), bp_grads.output(0)]
     return out_grad_tensors
 
 
@@ -991,8 +990,8 @@ class Tanh(Operation):
 
   def _grad_func(self, in_grad_tensors):
     with self._graph.as_default_graph():
-      bp_inputs = TanhGrad(input_list=[Tensor(self, 0), in_grad_tensors[0]])
-      out_grad_tensors = [Tensor(bp_inputs, 0)]
+      bp_inputs = TanhGrad(input_list=[self.output(0), in_grad_tensors[0]])
+      out_grad_tensors = [bp_inputs.output(0)]
     return out_grad_tensors
 
 
@@ -1007,14 +1006,14 @@ class TanhGrad(Operation):
     with self._graph.as_default_graph():
       mul = Mul(
           input_list=[
-              Tensor(Const(value=np.asarray(-2)), 0),
+              Const(value=np.asarray(-2)).output(0),
               in_grad_tensors[0]
           ]
       )
-      mul1 = Mul(input_list=[Tensor(mul, 0), self._input_list[1]])
-      bp_outputs = Mul(input_list=[Tensor(mul1, 0), self._input_list[0]])
+      mul1 = Mul(input_list=[mul.output(0), self._input_list[1]])
+      bp_outputs = Mul(input_list=[mul1.output(0), self._input_list[0]])
       bp_grads = TanhGrad(input_list=[self._input_list[0], in_grad_tensors[0]])
-      out_grad_tensors = [Tensor(bp_outputs, 0), Tensor(bp_grads, 0)]
+      out_grad_tensors = [bp_outputs.output(0), bp_grads.output(0)]
     return out_grad_tensors
 
 
@@ -1025,8 +1024,8 @@ class Relu(Operation):
 
   def _grad_func(self, in_grad_tensors):
     with self._graph.as_default_graph():
-      bp_inputs = ReluGrad(input_list=[Tensor(self, 0), in_grad_tensors[0]])
-      out_grad_tensors = [Tensor(bp_inputs, 0)]
+      bp_inputs = ReluGrad(input_list=[self.output(0), in_grad_tensors[0]])
+      out_grad_tensors = [bp_inputs.output(0)]
     return out_grad_tensors
 
 
@@ -1038,9 +1037,8 @@ class ReluGrad(Operation):
   def _grad_func(self, in_grad_tensors):
     with self._graph.as_default_graph():
       op, tensor_index = self._input_list[0].op, self._input_list[0].tensor_index
-      bp_outputs = op.get_zeros_op(tensor_index=tensor_index)
       bp_grads = ReluGrad(input_list=[self._input_list[0], in_grad_tensors[0]]) 
-      out_grad_tensors = [Tensor(bp_outputs, 0), Tensor(bp_grads, 0)]
+      out_grad_tensors = [op.get_zeros_tensor(tensor_index=tensor_index), bp_grads.output(0)]
     return out_grad_tensors 
 
 
@@ -1063,32 +1061,35 @@ class SoftmaxCrossEntropyWithLogits(Operation):
 
       ed = ExpandDims(input_list=[
           in_grad_tensors[0],
-          Tensor(Const(value=np.asarray(-1)), 0)
+          Const(value=np.asarray(-1)).output(0)
         ])
       ed1 = ExpandDims(input_list=[
           in_grad_tensors[1],
-          Tensor(Const(value=np.asarray(1)), 0)
+          Const(value=np.asarray(1)).output(0)
         ])
       ed2 = ExpandDims(input_list=[
-          Tensor(softmax, 0),
-          Tensor(Const(value=np.asarray(2)), 0)
+          softmax.output(0),
+          Const(value=np.asarray(2)).output(0)
         ])
     
-      mul = Mul(input_list=[Tensor(self, 1), Tensor(ed, 0)])
-      neg = Neg(input_list=[Tensor(log_softmax, 0)])
-      bp_labels = Mul(input_list=[Tensor(neg, 0), Tensor(ed, 0)])
+      mul = Mul(input_list=[self.output(1), ed.output(0)])
+      neg = Neg(input_list=[log_softmax.output(0)])
+      bp_labels = Mul(input_list=[neg.output(0), ed.output(0)])
 
-      bmm = BatchMatMul(input_list=[Tensor(ed1, 0), Tensor(ed2, 0)])
-      squeeze = Squeeze(input_list=[Tensor(bmm, 0)], axis=[1])
+      bmm = BatchMatMul(input_list=[ed1.output(0), ed2.output(0)])
+      squeeze = Squeeze(input_list=[bmm.output(0)], axis=[1])
       sub = Sub(input_list=[
           in_grad_tensors[1],
-          Tensor(squeeze, 0),
+          squeeze.output(0),
           ])
-      mul1 = Mul(input_list=[Tensor(sub, 0), Tensor(softmax, 0)])
-      bp_logits = Add(input_list=[Tensor(mul1, 0), Tensor(mul, 0)])
-      out_grad_tensors = [Tensor(bp_logits, 0), Tensor(bp_labels, 0)]
+      mul1 = Mul(input_list=[sub.output(0), softmax.output(0)])
+      bp_logits = Add(input_list=[mul1.output(0), mul.output(0)])
+      out_grad_tensors = [bp_logits.output(0), bp_labels.output(0)]
     return out_grad_tensors
 
+  @property
+  def num_outputs(self):
+    return 2
 
 class LogSoftmax(Operation):
   """
@@ -1105,17 +1106,17 @@ class LogSoftmax(Operation):
     from math_ops import Exp, Sum, Mul, Sub
 
     with self._graph.as_default_graph():
-      exp = Exp(input_list=[Tensor(self, 0)])  
+      exp = Exp(input_list=[self.output(0)])  
       sum0 = Sum(
           keepdims=True,
           input_list=[
               in_grad_tensors[0],
-              Tensor(Const(value=np.asarray([-1])), 0)
+              Const(value=np.asarray([-1])).output(0)
           ]
       )
-      mul = Mul(input_list=[Tensor(sum0, 0), Tensor(exp, 0)])
-      bp_inputs = Sub(input_list=[in_grad_tensors[0], Tensor(mul, 0)])
-      out_grad_tensors = [Tensor(bp_inputs, 0)]
+      mul = Mul(input_list=[sum0.output(0), exp.output(0)])
+      bp_inputs = Sub(input_list=[in_grad_tensors[0], mul.output(0)])
+      out_grad_tensors = [bp_inputs.output(0)]
     return out_grad_tensors
 
 
@@ -1129,17 +1130,17 @@ class Softmax(Operation):
     from math_ops import Sum, Mul, Sub
 
     with self._graph.as_default_graph(): 
-      mul = Mul(input_list=[in_grad_tensors[0], Tensor(self, 0)])
+      mul = Mul(input_list=[in_grad_tensors[0], self.output(0)])
       sum0 = Sum(
           keepdims=True,
           input_list=[
-              Tensor(mul, 0),
-              Tensor(Const(value=np.asarray(-1)), 0)
+              mul.output(0),
+              Const(value=np.asarray(-1)).output(0)
           ]
       )
-      sub = Sub(input_list=[in_grad_tensors[0], Tensor(sum0, 0)])
-      bp_inputs = Mul(input_list=[Tensor(sub, 0), Tensor(self, 0)])
-      out_grad_tensors = [Tensor(bp_inputs, 0)]
+      sub = Sub(input_list=[in_grad_tensors[0], sum0.output(0)])
+      bp_inputs = Mul(input_list=[sub.output(0), self.output(0)])
+      out_grad_tensors = [bp_inputs.output(0)]
     return out_grad_tensors
 
 

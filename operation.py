@@ -2,9 +2,6 @@
 import numpy as np
 from collections import defaultdict
 
-from default_stack import _DEFAULT_GRAPH_STACK
-
-
 from containers import get_default_graph
 from tensor import Tensor
 
@@ -27,6 +24,7 @@ class Operation(object):
     self._input_list = input_list
     self._graph.add_op(op=self, name=name)
     self._bp_indices = self._get_bp_indices()
+    self._outputs = self._create_output_tensors()
 
   def _get_bp_indices(self):
     if not hasattr(self, "_grad_func"):
@@ -43,7 +41,7 @@ class Operation(object):
   def run(self):
     """Compute the value of the tensors coming out of this op."""
     # avoid re-running this op
-    if self.name in self._graph._runtime._values:
+    if self.id in self._graph._runtime._values:
       return
 
     # prepare the value of the input tensors of this op
@@ -142,89 +140,50 @@ class Operation(object):
   def num_outputs(self):
     return 1
 
-  def get_shape_op(self, tensor_index=0):
-    """Create the `Shape` op for one of the output tensor of this op.
+  def _create_output_tensors(self):
+    if not hasattr(self, "_outputs"):
+      self._outputs = [Tensor(self, i) for i in range(self.num_outputs)]
+    return self._outputs
+
+  def output(self, index=0):
+    output_tensor = self._create_output_tensors()[index]
+    return output_tensor
+
+
+  def _get_dependent_tensor(self, op, name, dic, tensor_index):
+    tensor = self.output(tensor_index)
+    if tensor not in dic:
+      dependent_tensor = op(input_list=[tensor], name=name).output(0)
+      dic[tensor] = dependent_tensor
+    return dic[tensor]
+
+  def get_shape_tensor(self, tensor_index=0):
+    """Create the shape tensor for one of the output tensor of this op.
 
     Args:
       tensor_index (int): (Optional) index of the output tensor whose `Shape` op
         is to be created. Defaults to 0.
 
     Returns:
-      shape_op (Operation): a `Shape` op.
+      shape_tensor (Tensor): a shape tensor.
     """
-    tensor = Tensor(self, tensor_index)
-    if tensor not in self._graph._shape_ops:
-      shape_tensor = Tensor(Shape(input_list=[tensor], name=self.name+"_Shape"), 0)
-      self._graph._shape_ops[tensor] = shape_tensor
-    return self._graph._shape_ops[tensor]
+    from generic_ops import Shape
+    return self._get_dependent_tensor(Shape, self.name+"_Shape", self._graph._shape_tensors, tensor_index)
 
-  def get_size_op(self, tensor_index=0):
-    tensor = Tensor(self, tensor_index)
-    if tensor not in self._graph._size_ops:
-      size_tensor = Tensor(Size(input_list=[tensor], name=self.name+"_Size"), 0)
-      self._graph._size_ops[tensor] = size_tensor
-    return self._graph._size_ops[tensor]
+  def get_size_tensor(self, tensor_index=0):
+    from generic_ops import Size
+    return self._get_dependent_tensor(Size, self.name+"_Size", self._graph._size_tensors, tensor_index)
 
-  def get_rank_op(self, tensor_index=0):
-    tensor = Tensor(self, tensor_index)
-    if tensor not in self._graph._rank_ops:
-      rank_tensor = Tensor(Rank(input_list=[tensor], name=self.name+"_Rank"), 0)
-      self._graph._rank_ops[tensor] = rank_tensor
-    return self._graph._rank_ops[tensor]
+  def get_rank_tensor(self, tensor_index=0):
+    from generic_ops import Rank
+    return self._get_dependent_tensor(Rank, self.name+"_Rank", self._graph._rank_tensors, tensor_index)
 
-  def get_zeros_op(self, tensor_index=0):
-    tensor = Tensor(self, tensor_index)
-    if tensor not in self._graph._zeros_ops:
-      zeros_tensor = Tensor(ZerosLike(input_list=[tensor], name=self.name+"_Zeros"), 0)
-      self._graph._zeros_ops[tensor] = zeros_tensor
-    return self._graph._zeros_ops[tensor]
+  def get_zeros_tensor(self, tensor_index=0):
+    from generic_ops import ZerosLike
+    return self._get_dependent_tensor(ZerosLike, self.name+"_ZerosLike", self._graph._zeroslike_tensors, tensor_index)
 
-  def get_ones_op(self, tensor_index=0):
-    tensor = Tensor(self, tensor_index)
-    if tensor not in self._graph._ones_ops:
-      ones_tensor = Tensor(OnesLike(input_list=[tensor], name=self.name+"_Ones"), 0)
-      self._graph._ones_ops[tensor] = ones_tensor
-    return self._graph._ones_ops[tensor]
+  def get_ones_tensor(self, tensor_index=0):
+    from generic_ops import OnesLike
+    return self._get_dependent_tensor(OnesLike, self.name+"_OnesLike", self._graph._oneslike_tensors, tensor_index)
 
-
-class Zeros(Operation):
-  def _run(self, tensor_shape):
-    outputs = np.zeros(tensor_shape, dtype="float32")
-    return outputs
-
-    
-class Ones(Operation):
-  def _run(self, tensor_shape):
-    outputs = np.ones(tensor_shape, dtype="float32")
-    return outputs
-
-
-class ZerosLike(Operation):
-  def _run(self, tensor_value):
-    outputs = np.zeros_like(tensor_value, dtype="float32")
-    return outputs
-
-
-class OnesLike(Operation):
-  def _run(self, tensor_value):
-    outputs = np.ones_like(tensor_value, dtype="float32")
-    return outputs
-
-
-class Shape(Operation):
-  def _run(self, *tensor_values):
-    outputs = [np.asarray(tensor_value.shape) for tensor_value in tensor_values] 
-    return outputs
-
-
-class Size(Operation):
-  def _run(self, tensor_value):
-    outputs = np.size(tensor_value)
-    return outputs
-
-
-class Rank(Operation):
-  def _run(self, tensor_value):
-    outputs = len(tensor_value.shape)
-    return outputs
 

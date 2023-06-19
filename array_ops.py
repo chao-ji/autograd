@@ -3,9 +3,8 @@ import numpy as np
 
 from operation import Operation
 
-from origin_ops import Const
+from generic_ops import Const
 from math_ops import Sum, Mean
-from tensor import Tensor
 
 
 class Reshape(Operation):
@@ -20,10 +19,10 @@ class Reshape(Operation):
       bp_inputs = Reshape(
           input_list=[
               in_grad_tensors[0],
-              Tensor(op.get_shape_op(tensor_index=tensor_index), 0)
+              op.get_shape_tensor(tensor_index=tensor_index)
           ]
       )
-      out_grad_tensors = [Tensor(bp_inputs, 0)]
+      out_grad_tensors = [bp_inputs.output(0)]
     return out_grad_tensors
 
   def _get_bp_indices(self):
@@ -39,8 +38,8 @@ class Transpose(Operation):
   def _grad_func(self, in_grad_tensors):
     with self._graph.as_default_graph():
       invert_perm = InvertPermutation(input_list=[self._input_list[1]])
-      bp_inputs = Transpose(input_list=[in_grad_tensors[0], Tensor(invert_perm, 0)])
-      out_grad_tensors = [Tensor(bp_inputs, 0)]
+      bp_inputs = Transpose(input_list=[in_grad_tensors[0], invert_perm.output(0)])
+      out_grad_tensors = [bp_inputs.output(0)]
     return out_grad_tensors
 
   def _get_bp_indices(self):
@@ -73,17 +72,18 @@ class Pack(Operation):
 
   def _grad_func(self, in_grad_tensors):
     with self._graph.as_default_graph():
-      bp_inputs = Unpack(axis=self._axis, input_list=[in_grad_tensors[0]])
-      out_grad_tensors = [Tensor(bp_inputs, i) for i in range(len(self._input_list))]
+      bp_inputs = Unpack(axis=self._axis, num=len(self._input_list), input_list=[in_grad_tensors[0]])
+      out_grad_tensors = [bp_inputs.output(i) for i in range(len(self._input_list))]
     return out_grad_tensors
 
 
 class Unpack(Operation):
 
-  def __init__(self, axis, input_list, graph=None, num=None, name=None):
+  def __init__(self, axis, num, input_list, graph=None, name=None):
+    self._num = num 
     super(Unpack, self).__init__(graph=graph, input_list=input_list, name=name)
     self._axis = axis
-  
+ 
   def _run(self, inputs):
     axis_size = inputs.shape[self._axis]
     outputs = np.split(inputs, axis_size, axis=self._axis) 
@@ -96,9 +96,12 @@ class Unpack(Operation):
           axis=self._axis,
           input_list=in_grad_tensors
       )
-      out_grad_tensors = [Tensor(bp_inputs, 0)]
+      out_grad_tensors = [bp_inputs.output(0)]
     return out_grad_tensors
 
+  @property
+  def num_outputs(self):
+    return self._num
 
 
 class Tile(Operation):
@@ -114,35 +117,35 @@ class Tile(Operation):
           axis=0,
           input_list=[
               self._input_list[1],
-              Tensor(op.get_shape_op(tensor_index=tensor_index), 0)
+              op.get_shape_tensor(tensor_index=tensor_index)
           ]
       )
       transpose = Transpose(
           input_list=[
-            Tensor(pack, 0),
-            Tensor(Const(value=np.asarray((1, 0))), 0)
+            pack.output(0),
+            Const(value=np.asarray((1, 0))).output(0)
           ]
       )
       reshape = Reshape(
           input_list=[
-            Tensor(transpose, 0),
-            Tensor(Const(value=np.asarray(-1)), 0)
+            transpose.output(0),
+            Const(value=np.asarray(-1)).output(0)
           ]
       )
       reshape1 = Reshape(
-          input_list=[in_grad_tensors[0], Tensor(reshape, 0)]
+          input_list=[in_grad_tensors[0], reshape.output(0)]
       )
       reduction_indices = Range(
           input_list=[
-              Tensor(Const(value=np.asarray(0)), 0),
-              Tensor(reshape.get_size_op(tensor_index=0), 0),
-              Tensor(Const(value=np.asarray(2)), 0)
+              Const(value=np.asarray(0)).output(0),
+              reshape.get_size_tensor(tensor_index=0),
+              Const(value=np.asarray(2)).output(0)
           ]
       )
       bp_inputs = Sum(
-          input_list=[Tensor(reshape1, 0), Tensor(reduction_indices, 0)]
+          input_list=[reshape1.output(0), reduction_indices.output(0)]
       )
-      out_grad_tensors = [Tensor(bp_inputs, 0)]
+      out_grad_tensors = [bp_inputs.output(0)]
     return out_grad_tensors
 
   def _get_bp_indices(self):
@@ -175,10 +178,10 @@ class StridedSlice(Operation):
       op, tensor_index = self._input_list[0].op, self._input_list[0].tensor_index
       ssg = StridedSliceGrad(
           input_list=[
-              Tensor(op.get_shape_op(tensor_index=tensor_index), 0)
+              op.get_shape_tensor(tensor_index=tensor_index)
           ] + self._input_list[1:4] + in_grad_tensors
       )
-      out_grad_tensors = [Tensor(ssg, 0)]
+      out_grad_tensors = [ssg.output(0)]
     return out_grad_tensors
 
   def _get_bp_indices(self):
@@ -212,7 +215,7 @@ class StridedSliceGrad(Operation):
       bp_grads = StridedSlice(
           input_list=in_grad_tensors + self._input_list[1:4]
       )     
-      out_grad_tensors = [Tensor(bp_grads, 0)]
+      out_grad_tensors = [bp_grads.output(0)]
     return out_grad_tensors
 
   def _get_bp_indices(self):
@@ -251,31 +254,31 @@ class Slice(Operation):
 
       op, tensor_index = self._input_list[0].op, self._input_list[0].tensor_index
       sub = Sub(input_list=[
-              Tensor(op.get_shape_op(tensor_index=tensor_index), 0), 
-              Tensor(self.get_shape_op(tensor_index=0), 0)
+              op.get_shape_tensor(tensor_index=tensor_index),
+              self.get_shape_tensor(tensor_index=0),
           ],
       ) 
       sub1 = Sub(
-          input_list=[Tensor(sub, 0), self._input_list[1]],
+          input_list=[sub.output(0), self._input_list[1]],
       )
       pack = Pack(
           axis=0,
           input_list=[
-              Tensor(op.get_rank_op(tensor_index=tensor_index), 0),
-              Tensor(Const(value=np.asarray(1)), 0)
+              op.get_rank_tensor(tensor_index=tensor_index),
+              Const(value=np.asarray(1)).output(0)
           ],
       ) 
-      reshape = Reshape(input_list=[self._input_list[1], Tensor(pack, 0)])
-      reshape1 = Reshape(input_list=[Tensor(sub1, 0), Tensor(pack, 0)])
+      reshape = Reshape(input_list=[self._input_list[1], pack.output(0)])
+      reshape1 = Reshape(input_list=[sub1.output(0), pack.output(0)])
       concat = Concat(
           input_list=[
-              Tensor(Const(value=np.asarray(1)), 0),
-              Tensor(reshape, 0), Tensor(reshape1, 0)
+              Const(value=np.asarray(1)).output(0),
+              reshape.output(0), reshape1.output(0)
           ],
       )
 
-      bp_inputs = Pad(input_list=in_grad_tensors+[Tensor(concat, 0)])
-      out_grad_tensors = [Tensor(bp_inputs, 0)]
+      bp_inputs = Pad(input_list=in_grad_tensors+[concat.output(0)])
+      out_grad_tensors = [bp_inputs.output(0)]
     return out_grad_tensors
 
   def _get_bp_indices(self):
@@ -293,24 +296,24 @@ class Concat(Operation):
     
     with self._graph.as_default_graph():
       shapes = [
-          Tensor(arg.op.get_shape_op(tensor_index=arg.tensor_index), 0)
+          arg.op.get_shape_tensor(tensor_index=arg.tensor_index)
               for arg in self._input_list[1:]
       ]
       op, tensor_index = self._input_list[1].op, self._input_list[1].tensor_index
       mod = FloorMod(
           input_list=[self._input_list[0]] + [
-              Tensor(op.get_rank_op(tensor_index=tensor_index), 0)
+              op.get_rank_tensor(tensor_index=tensor_index)
           ],
       )
       offset = ConcatOffset(
-          input_list=[Tensor(mod, 0)]+shapes,
+          input_list=[mod.output(0)]+shapes,
       ) 
       out_grad_tensors = []
       for i in range(len(self._input_list) - 1):
-        out_grad_tensors.append(Tensor(
-            Slice(input_list=[in_grad_tensors[0], Tensor(offset, i), shapes[i]],
-            ), 0
-        ))
+        out_grad_tensors.append(
+            Slice(input_list=[in_grad_tensors[0], offset.output(i), shapes[i]],
+            ).output(0)
+        )
     return out_grad_tensors
 
   def _get_bp_indices(self):
@@ -325,6 +328,10 @@ class ConcatOffset(Operation):
     shapes = np.pad(np.expand_dims(shapes, axis=1), [[0, 0], [concat_dim, len(shape[0]) - concat_dim - 1]])
     shapes = [s for s in shapes]
     return shapes
+
+  @property
+  def num_outputs(self):
+    return len(self._input_list) - 1 
 
 
 class Pad(Operation):
@@ -343,33 +350,33 @@ class Pad(Operation):
       pack = Pack(
           axis=0,
           input_list=[
-              Tensor(op.get_rank_op(tensor_index=tensor_index), 0),
-              Tensor(Const(value=np.asarray(1)), 0)
+              op.get_rank_tensor(tensor_index=tensor_index),
+              Const(value=np.asarray(1)).output(0)
           ],
       )
 
       slice0 = Slice(
           input_list=[
               self._input_list[1],
-              Tensor(Const(value=np.asarray((0, 0))), 0),
-              Tensor(pack, 0)
+              Const(value=np.asarray((0, 0))).output(0),
+              pack.output(0)
           ],
       )
       reshape = Reshape(
           input_list=[
-              Tensor(slice0, 0),
-              Tensor(Const(value=np.asarray(-1)), 0)
+              slice0.output(0),
+              Const(value=np.asarray(-1)).output(0)
           ],
       ) 
 
       bp_inputs = Slice(
           input_list=[
               in_grad_tensors[0],
-              Tensor(reshape, 0),
-              Tensor(op.get_shape_op(tensor_index=tensor_index), 0)
+              reshape.output(0),
+              op.get_shape_tensor(tensor_index=tensor_index),
           ],
       )
-      out_grad_tensors = [Tensor(bp_inputs, 0)]
+      out_grad_tensors = [bp_inputs.output(0)]
     return out_grad_tensors 
 
   def _get_bp_indices(self):
@@ -387,10 +394,10 @@ class ExpandDims(Operation):
       op, tensor_index = self._input_list[0].op, self._input_list[0].tensor_index
       bp_inputs = Reshape(
           input_list=[
-              in_grad_tensors[0], Tensor(op.get_shape_op(tensor_index=tensor_index), 0)
+              in_grad_tensors[0], op.get_shape_tensor(tensor_index=tensor_index),
           ] 
       )
-      out_grad_tensors = [Tensor(bp_inputs, 0)]
+      out_grad_tensors = [bp_inputs.output(0)]
     return out_grad_tensors
 
   def _get_bp_indices(self):
@@ -414,10 +421,10 @@ class Squeeze(Operation):
       op, tensor_index = self._input_list[0].op, self._input_list[0].tensor_index
       bp_inputs = Reshape(
           input_list=[
-              in_grad_tensors[0], Tensor(op.get_shape_op(tensor_index=tensor_index), 0)
+              in_grad_tensors[0], op.get_shape_tensor(tensor_index=tensor_index),
           ],
       )
-      out_grad_tensors = [Tensor(bp_inputs, 0)]
+      out_grad_tensors = [bp_inputs.output(0)]
     return out_grad_tensors
 
 
