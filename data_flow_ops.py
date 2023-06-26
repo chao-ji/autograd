@@ -4,6 +4,9 @@ import numpy as np
 from operation import Operation
 from generic_ops import Const
 
+from mixins import _ShapeAsIs
+from tensor_shape import TensorShape
+
 
 class DynamicStitch(Operation):
 
@@ -49,6 +52,37 @@ class DynamicStitch(Operation):
     bp_indices = set(range(size, size * 2))
     return bp_indices
 
+  def _compute_shapes(self):
+    #return [TensorShape(None)]
+    # validation
+    assert len(self._input_list) % 2 == 0  
+
+    size = len(self._input_list) // 2
+    constant = None
+    constant_ndims = None
+    for indices, data in zip(self._input_list[:size], self._input_list[size:]):
+      if indices.shape.level > 0 and data.shape.level > 0:
+        assert data.shape.ndims >= indices.shape.ndims
+        if constant_ndims is None:
+          constant_ndims = data.shape.ndims - indices.shape.ndims
+        else:
+          assert data.shape.ndims - indices.shape.ndims == constant_ndims
+ 
+        if indices.shape.level == 2 and data.shape.level == 2:
+          if constant is None:
+            constant = TensorShape(data.shape.raw_shape[-constant_ndims:])
+          else:
+            assert constant._compatible_with(data.shape[-constant_ndims:])
+            constant._merge(data.shape[-constant_ndims:])
+
+    # compute shapes
+    if constant is not None:
+      return [TensorShape((None,) + constant.raw_shape)]
+    elif constant_ndims is not None:
+      return [TensorShape([None] * (constant_ndims + 1))]
+    else:
+      return [TensorShape(None)]    
+      
 
 class Gather(Operation):
   def _run(self, params, indices, axis):
@@ -177,6 +211,28 @@ class Gather(Operation):
   def _get_bp_indices(self):
     return [0]
 
+  def _compute_shapes(self):
+    # validation
+    if self._input_list[2].shape.level > 0:
+      assert self._input_list[2].shape.ndims == 0
+
+    # compute shapes
+    if self._input_list[0].shape.level > 0 and self._input_list[1].shape.level > 0:
+      if (self._input_list[0].shape.level == 2 and
+          self._input_list[1].shape.level == 2 and
+          hasattr(self._input_list[2].op, "_value")
+        ):
+        axis = self._input_list[2].op._value.item()
+        params_shape = list(self._input_list[0].shape.raw_shape) 
+        indices_shape = list(self._input_list[1].shape.raw_shape)
+
+        raw_shape = params_shape[:axis] + indices_shape + params_shape[axis+1:]
+        return [TensorShape(raw_shape)]
+      else:
+        return [TensorShape([None] * (self._input_list[0].shape.ndims + self._input_list[1].shape.ndims - 1))]
+    else:
+      return [TensorShape(None)]
+
 
 class BroadcastTo(Operation):
   """"""
@@ -212,6 +268,29 @@ class BroadcastTo(Operation):
 
   def _get_bp_indices(self):
     return [0]
+
+  def _compute_shapes(self):
+    # validation
+    if hasattr(self._input_list[1].op, "_value"):
+      target_shape = self._input_list[1].op._value
+      assert target_shape.ndim == 1 and (target_shape > 0).all()
+      if self._input_list[0].shape.level > 0:
+        assert all([x is None or x == 1 or x == y for x, y in zip(self._input_list[0].shape[::-1], target_shape[::-1])])
+
+    if self._input_list[1].shape.level > 0:
+      assert self._input_list[1].shape.ndims == 1
+      if self._input_list[1].shape.level == 2:
+        orig_ndims = self._input_list[0].shape.ndims
+        assert orig_ndims is None or orig_ndims <= self._input_list[1].shape[0]
+
+    # compute shapes
+    if hasattr(self._input_list[1].op, "_value"):
+      return [TensorShape(self._input_list[1].op._value.tolist())]
+    elif self._input_list[1].shape.level == 2:
+      ndims = self._input_list[1].shape[0]
+      return [TensorShape([None] * ndims)]
+    else:
+      return [TensorShape(None)] 
 
 
 class Select(Operation):
@@ -260,8 +339,20 @@ class Select(Operation):
   def _get_bp_indices(self):
     return [1, 2]
 
+  def _compute_shapes(self):
+    # validation
+    assert (self._input_list[0]._broadcastable_with(self._input_list[1]) and 
+        self._input_list[0]._broadcastable_with(self._input_list[2]) and 
+        self._input_list[1]._broadcastable_with(self._input_list[2])) 
 
-class StopGradient(Operation):
+    # compute shapes
+    if self._input_list[0].shape.level > 0 and self._input_list[1].shape.level > 0 and self._input_list[2].shape.level > 0:
+     
+    else:
+      return [TensorShape(None)]
+
+
+class StopGradient(Operation, _ShapeAsIs):
   def _run(self, inputs):
     outputs = inputs
     return outputs

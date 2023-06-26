@@ -5,6 +5,8 @@ from operation import Operation
 
 from generic_ops import Const
 from math_ops import Sum, Mean
+from tensor_shape import TensorShape
+from mixins import _ShapeAsIs
 
 
 class Reshape(Operation):
@@ -28,6 +30,30 @@ class Reshape(Operation):
   def _get_bp_indices(self):
     return [0]
 
+  def _compute_shapes(self):
+    # validation
+    if hasattr(self._input_list[1].op, "_value"):
+      target_shape = self._input_list[1].op._value
+      assert (target_shape < 0).sum() <= 1
+      if (target_shape >= 1).all():
+        assert self._input_list[0].shape._partial_size() <= np.prod(target_shape).item() 
+    if self._input_list[1].shape.level > 0:
+      assert self._input_list[1].shape.ndims <= 1
+
+    # compute shapes
+    if hasattr(self._input_list[1].op, "_value"):
+      target_shape = self._input_list[1].op._value
+      if target_shape.ndim == 0 and target_shape == -1:
+        return [TensorShape([None])]
+      elif (target_shape >= 0).all():
+        return [TensorShape(target_shape)]
+      else:
+        return [TensorShape([None] * self._input_list[1].shape[0])]
+    elif self._input_list[1].shape.level == 2:
+      return [TensorShape([None] * self._input_list[1].shape[0])]
+    else:
+      return [TensorShape(None)]
+
 
 class Transpose(Operation):
 
@@ -45,26 +71,55 @@ class Transpose(Operation):
   def _get_bp_indices(self):
     return [0]
 
+  def _compute_shapes(self):
+    # validation
+    if hasattr(self._input_list[1].op, "_value"):
+      assert self._input_list[1].op._value.ndim == 1
+      perm = self._input_list[1].op._value.tolist()
+      assert len(set(perm)) == max(perm) + 1 and min(perm) == 0
+      if self._input_list[0].shape.level > 0:
+        assert len(perm) == self._input_list[0].shape.ndims
 
-class InvertPermutation(Operation):
+    if self._input_list[1].shape.level > 0:
+      assert self._input_list[1].shape.ndims == 1
+    if self._input_list[0].shape.level > 0 and self._input_list[1].shape.level == 2:
+      assert self._input_list[0].shape.ndims == self._input_list[1].shape[0] 
+
+    # compute shapes
+    if hasattr(self._input_list[1].op, "_value"):
+      return [TensorShape([self._input_list[0].shape[p] for p in perm])]
+    elif self._input_list[0].shape.level != 0:
+      ndims = self._input_list[0].shape.ndims
+      return [TensorShape([None] * ndims)]
+    elif self._input_list[1].shape.level == 2:
+      ndims = self._input_list[1].shape[0]
+      return [TensorShape([None] * ndims)]
+    else:
+      return [TensorShape(None)]
+
+
+class InvertPermutation(Operation, _ShapeAsIs):
 
   def _run(self, perm):
     outputs = np.argsort(perm)
     return outputs
 
-
+ 
 class Range(Operation):
 
   def _run(self, start, limit, delta):
     outputs = np.arange(start, limit, delta)
     return outputs
 
+  def _compute_shapes(self):
+    return [TensorShape([None])]
+
 
 class Pack(Operation):
 
   def __init__(self, axis, input_list, graph=None, name=None):
-    super(Pack, self).__init__(graph=graph, input_list=input_list, name=name)
     self._axis = axis
+    super(Pack, self).__init__(graph=graph, input_list=input_list, name=name)
 
   def _run(self, *input_tensor_values):
     outputs = np.stack(input_tensor_values, axis=self._axis)
@@ -72,17 +127,45 @@ class Pack(Operation):
 
   def _grad_func(self, in_grad_tensors):
     with self._graph.as_default_graph():
-      bp_inputs = Unpack(axis=self._axis, num=len(self._input_list), input_list=[in_grad_tensors[0]])
+      bp_inputs = Unpack(num=len(self._input_list), axis=self._axis, input_list=[in_grad_tensors[0]])
       out_grad_tensors = [bp_inputs.output(i) for i in range(len(self._input_list))]
     return out_grad_tensors
+
+  def _compute_shapes(self):
+    # validation
+    for tensor in self._input_list[1:]:
+      assert self._input_list[0].shape._compatible_with(tensor.shape)
+
+    ndims = None
+    for tensor in self._input_list:
+      if tensor.shape.level > 0:
+        if ndims is None:
+          ndims = tensor.shape.ndims
+        else:
+          assert ndims == tensor.shape.ndims
+    if ndims is not None:
+      assert -(ndims + 1) <= self._axis < ndims + 1 
+
+    # compute shapes
+    if ndims is None:
+      return [TensorShape(None)]
+    else:
+      shape = TensorShape([None] * ndims)
+      for tensor in self._input_list:
+        shape._merge(tensor.shape)    
+      raw_shape = list(shape.raw_shape)
+
+      axis = self._axis if ndims == 0 else self._axis % (ndims + 1)
+      raw_shape = raw_shape[:axis] + [len(self._input_list)] + raw_shape[axis:]
+      return [TensorShape(raw_shape)]
 
 
 class Unpack(Operation):
 
-  def __init__(self, axis, num, input_list, graph=None, name=None):
+  def __init__(self, num, axis, input_list, graph=None, name=None):
     self._num = num 
-    super(Unpack, self).__init__(graph=graph, input_list=input_list, name=name)
     self._axis = axis
+    super(Unpack, self).__init__(graph=graph, input_list=input_list, name=name)
  
   def _run(self, inputs):
     axis_size = inputs.shape[self._axis]
@@ -102,6 +185,23 @@ class Unpack(Operation):
   @property
   def num_outputs(self):
     return self._num
+
+  def _compute_shapes(self):
+    # validation
+    if self._input_list[0].shape.level > 0:
+      ndims = self._input_list[0].shape.ndims
+      axis = self._axis if ndims == 0 else self._axis % ndims  
+      if self._input_list[0].shape[axis] is not None:
+        assert self._input_list[0].shape[axis] == self._num
+      assert -ndims <= axis < ndims
+
+    # compute shapes
+    if self._input_list[0].shape.level == 0:
+      return [TensorShape(None) for _ in range(self._num)] 
+    else:
+      raw_shape = list(self._input_list[0].shape.raw_shape)
+      raw_shape = raw_shape[:axis] + raw_shape[axis + 1:]
+      return [TensorShape(raw_shape) for _ in range(self._num)]
 
 
 class Tile(Operation):
@@ -151,6 +251,34 @@ class Tile(Operation):
   def _get_bp_indices(self):
     return [0]
 
+  def _compute_shapes(self):
+    # validation
+    if self._input_list[1].shape.level > 0:
+      assert self._input_list[1].shape.ndims == 1
+      if self._input_list[1].shape.level == 2 and self._input_list[0].shape.level > 0:
+        assert self._input_list[1].shape[0] == self._input_list[0].shape.ndims
+    if hasattr(self._input_list[1].op, "_value"):
+      assert self._input_list[1].op._value.ndim == 1
+      assert (self._input_list[1].op._value >= 1).all()
+      if self._input_list[0].shape.level > 0:
+        assert self._input_list[1].op._value.shape[0] == self._input_list[0].shape.ndims
+
+    # compute shapes
+    if hasattr(self._input_list[1].op, "_value") and self._input_list[0].shape.level > 0:
+      raw_shape = []
+      for size, multiple in zip(self._input_list[0].shape, self._input_list[1].op._value):
+        raw_shape.append(None if size is None else size * multiple)
+      return [TensorShape(raw_shape)]
+    elif self._input_list[0].shape.level == 0:
+      if self._input_list[1].shape.level > 0 and self._input_list[1].shape[0] is not None: 
+        ndims = self._input_list[1].shape[0]
+        return [TensorShape([None] * ndims)]
+      else:
+        return [TensorShape(None)] 
+    else:
+      ndims = self._input_list[0].shape.ndims
+      return [TensorShape([None] * ndims)]
+
 
 class StridedSlice(Operation):
 
@@ -187,6 +315,58 @@ class StridedSlice(Operation):
   def _get_bp_indices(self):
     return [0]
 
+  def _compute_shapes(self):
+    # validation
+    ndims = None
+    if self._input_list[0].shape.level > 0:
+      ndims = self._input_list[0].shape.ndims
+
+    for tensor in self._input_list[1:]:
+      if tensor.shape.level > 0:
+        assert tensor.shape.ndims == 1
+        if tensor.shape.level == 2:
+          if ndims is not None:
+            assert ndims == tensor.shape[0] 
+          else:
+            ndims = tensor.shape[0]
+
+    # compute shapes
+    if (self._input_list[0].shape.level > 0 and 
+        hasattr(self._input_list[1].op, "_value") and
+        hasattr(self._input_list[2].op, "_value") and
+        hasattr(self._input_list[3].op, "_value")):
+      raw_shape = [] 
+      for i, b, e, s in zip(
+          self._input_list[0].shape.raw_shape,
+          self._input_list[1].op._value.tolist(),
+          self._input_list[2].op._value.tolist(),
+          self._input_list[3].op._value.tolist(),
+        ):
+        if i is None:
+          raw_shape.append(None)
+        else:
+          b = b % i
+          e = np.where(e < 0, e % i, e)
+
+          r = np.arange(b, e, s)
+          
+          raw_shape.append(min(r.max(), i) - max(r.min(), 0))
+      return [TensorShape(raw_shape)]
+    elif self._input_list[0].shape.level > 0:
+      ndims = self._input_list[0].shape.ndims
+      return [TensorShape([None] * ndims)]
+    elif self._input_list[1].shape.level == 2: 
+      ndims = self._input_list[1].shape[0]
+      return [TensorShape([None] * ndims)]
+    elif self._input_list[2].shape.level == 2:
+      ndims = self._input_list[2].shape[0]
+      return [TensorShape([None] * ndims)]
+    elif self._input_list[3].shape.level == 2:
+      ndims = self._input_list[3].shape[0]
+      return [TensorShape([None] * ndims)]
+    else:
+      return [TensorShape(None)]
+
 
 class StridedSliceGrad(Operation):
 
@@ -220,6 +400,42 @@ class StridedSliceGrad(Operation):
 
   def _get_bp_indices(self):
     return [4]
+
+  def _compute_shapes(self):
+    # validation
+    ndims = None
+    if self._input_list[4].shape.level > 0:
+      ndims = self._input_list[4].shape.ndims
+
+    for tensor in self._input_list[:4]:
+      if tensor.shape.level > 0:
+        assert tensor.shape.ndims == 1
+        if tensor.shape.level == 2:
+          if ndims is not None:
+            assert ndims == tensor.shape[0]
+          else:
+            ndims = tensor.shape[0]
+
+    # compute shapes
+    if hasattr(self._input_list[0].op, "_value"):
+      return [TensorShape(self._input_list[0].op._value.astype("int32").tolist())]
+    elif self._input_list[0].shape.level == 2:
+      ndims = self._input_list[0].shape[0]
+      return [TensorShape([None] * ndims)]
+    elif self._input_list[1].shape.level == 2:
+      ndims = self._input_list[1].shape[0]
+      return [TensorShape([None] * ndims)]
+    elif self._input_list[2].shape.level == 2:
+      ndims = self._input_list[2].shape[0]
+      return [TensorShape([None] * ndims)]
+    elif self._input_list[3].shape.level == 2:
+      ndims = self._input_list[3].shape[0]
+      return [TensorShape([None] * ndims)]
+    elif self._input_shape[4].shape.level > 0:
+      ndims = self._input_shape[4].shape.ndims 
+      return [TensorShape([None] * ndims)]
+    else:
+      return [TensorShape(None)]
 
 
 class Slice(Operation):
@@ -284,6 +500,74 @@ class Slice(Operation):
   def _get_bp_indices(self):
     return [0]
 
+  def _compute_shapes(self):
+    #return [TensorShape(None)]
+    # validation
+    ndims = None
+    if self._input_list[0].shape.level > 0:
+      ndims = self._input_list[0].shape.ndims
+
+    for tensor in self._input_list[1:]:
+      if tensor.shape.level > 0:
+        assert tensor.shape.ndims == 1
+        if tensor.shape.level == 2:
+          if ndims is not None:
+            assert ndims == tensor.shape[0]
+          else:
+            ndims = tensor.shape[0]
+
+    if hasattr(self._input_list[1].op, "_value"):
+      assert (self._input_list[1].op._value >= 0).all() 
+    if hasattr(self._input_list[2].op, "_value"):
+      assert (self._input_list[2].op._value >= -1).all()
+
+    # compute shapes
+    if (self._input_list[0].shape.level > 0 and
+        hasattr(self._input_list[1].op, "_value") and
+        hasattr(self._input_list[2].op, "_value")): 
+      raw_shape = [] 
+      for i, b, s in zip(
+          self._input_list[0].shape,
+          self._input_list[1].op._value.tolist(),
+          self._input_list[2].op._value.tolist()
+        ):
+        if i is None:
+          raw_shape.append(None)
+        else:
+          raw_shape.append(i - b if s == -1 else s)
+      return [TensorShape(raw_shape)]
+    elif self._input_list[0].shape.level > 0:
+      ndims = self._input_list[0].shape.ndims
+      return [TensorShape([None] * ndims)]
+    elif self._input_list[1].shape.level == 2:
+      ndims = self._input_list[1].shape[0]
+      return [TensorShape([None] * ndims)]
+    elif self._input_list[2].shape.level == 2:
+      ndims = self._input_list[2].shape[0]
+      return [TensorShape([None] * ndims)] 
+    else:
+      return [TensorShape(None)]
+
+
+    if self._input_list[0].shape.ndims is None:
+      return TensorShape(None)
+    elif (hasattr(self._input_list[1].op, "_value") and
+          hasattr(self._input_list[2].op, "_value")
+      ):
+      raw_shape = []  
+      for i, b, s in zip(
+          self._input_list[0].shape.raw_shape,
+          self._input_list[1].op._value.astype("int32").tolist(),
+          self._input_list[2].op._value.astype("int32").tolist(),
+        ): 
+        if i is None:
+          raw_shape.append(None if s == -1 else s)
+        else:
+          raw_shape.append(i - b if s == -1 else s)
+      return TensorShape(raw_shape) 
+    else:
+      return TensorShape([None] * self._input_list[0].shape.ndims) 
+      
 
 class Concat(Operation):
 
@@ -320,6 +604,49 @@ class Concat(Operation):
     backprop_indices = list(range(1, len(self._input_list)))
     return backprop_indices 
 
+  def _compute_shapes(self):
+    # validation
+    diff_axes = set()
+    for tensor in self._input_list[2:]:
+      if self._input_list[1].shape.level > 0 and tensor.shape.level > 0:
+        assert self._input_list[1].shape.ndims == tensor.shape.ndims
+        diff_axes.update(self._input_list[1].shape._diff_at(tensor.shape))
+    assert len(diff_axes) <= 1
+
+    ndims = set([tensor.shape.ndims for tensor in self._input_list[1:] if tensor.shape.level > 0])
+    assert len(ndims) <= 1
+    ndims = None if len(ndims) == 0 else list(ndims)[0]
+
+    if hasattr(self._input_list[0].op, "_value"):
+      axis = self._input_list[0].op._value.item()
+      if ndims is not None:
+        axis = axis if ndims == 0 else axis % ndims
+      if len(diff_axes) == 1:
+        assert list(diff_axes)[0] == axis 
+
+    # compute shapes
+    if ndims is None:
+      return [TensorShape(None)]
+    else:
+      if hasattr(self._input_list[0].op, "_value"):
+        shape = TensorShape([None] * ndims)
+        for tensor in self._input_list[1:]:
+          shape._merge(tensor.shape, skip=[axis])
+        
+        size = []
+        for tensor in self._input_list[1:]:
+          if tensor.shape.level == 0 or tensor.shape[axis] is None:
+            size = None
+            break
+          else:
+            size.append(tensor.shape[axis])
+        raw_shape = list(shape._raw_shape)
+        raw_shape[axis] = None if size is None else sum(size)
+ 
+        return [TensorShape(raw_shape)]
+      else:
+        return [TensorShape([None] * ndims)]
+
 
 class ConcatOffset(Operation):
 
@@ -332,6 +659,29 @@ class ConcatOffset(Operation):
   @property
   def num_outputs(self):
     return len(self._input_list) - 1 
+
+  def _compute_shapes(self):
+    # validation
+    diff_axes = set()
+    for tensor in self._input_list[2:]:
+      if self._input_list[1].shape.level > 0 and tensor.shape.level > 0:
+        assert self._input_list[1].shape.ndims == tensor.shape.ndims
+        diff_axes.update(self._input_list[1].shape._diff_at(tensor.shape))
+    assert len(diff_axes) <= 1
+
+    ndims = set([tensor.shape.ndims for tensor in self._input_list[1:] if tensor.shape.level > 0])
+    assert len(ndims) <= 1
+    ndims = None if len(ndims) == 0 else list(ndims)[0]
+
+    if hasattr(self._input_list[0].op, "_value"):
+      axis = self._input_list[0].op._value.item()
+      if ndims is not None:
+        axis = axis if ndims == 0 else axis % ndims
+      if len(diff_axes) == 1:
+        assert list(diff_axes)[0] == axis
+
+    # compute shapes
+    return [tensor.shape for tensor in self._input_list[1:]]
 
 
 class Pad(Operation):
@@ -377,10 +727,45 @@ class Pad(Operation):
           ],
       )
       out_grad_tensors = [bp_inputs.output(0)]
-    return out_grad_tensors 
+    return out_grad_tensors
 
   def _get_bp_indices(self):
     return [0]
+
+  def _compute_shapes(self):
+
+    # validation
+    if hasattr(self._input_list[1].op, "_value"):
+      paddings = self._input_list[1].op._value
+      assert paddings.ndim == 2 and paddings.shape[1] == 2 and (paddings >= 0).all()
+      if self._input_list[0].shape.level > 0:
+        assert paddings.shape[0] == self._input_list[0].shape.ndims
+
+    if self._input_list[1].shape.level > 0:
+      assert self._input_list[1].shape.ndims == 2
+    if (self._input_list[0].shape.level > 0 and
+        self._input_list[1].shape.level > 0 and
+        self._input_list[1].shape[0] is not None
+      ):
+      assert self._input_list[0].shape.ndims == self._input_list[1].shape[0]
+
+    # compute shapes
+    if self._input_list[0].shape.level > 0 and hasattr(self._input_list[1].op, "_value"):
+      raw_shape = []
+      for i, padding in zip(self._input_list[0].shape, paddings):
+        if i is None:
+          raw_shape.append(None)
+        else:
+          raw_shape.append(i + padding[0] + padding[1])
+      return [TensorShape(raw_shape)]
+    elif self._input_list[1].shape.level > 0:
+      ndims = self._input_list[1].shape.ndims
+      return [TensorShape([None] * ndims)]
+    elif self._input_list[1].shape.level > 0 and self._input_list[1].shape[0] is not None:
+      ndims = self._input_list[1].shape[0]
+      return [TensorShape([None] * ndims)]
+    else:
+      return [TensorShape(None)]
 
 
 class ExpandDims(Operation):
@@ -395,7 +780,7 @@ class ExpandDims(Operation):
       bp_inputs = Reshape(
           input_list=[
               in_grad_tensors[0], op.get_shape_tensor(tensor_index=tensor_index),
-          ] 
+          ]
       )
       out_grad_tensors = [bp_inputs.output(0)]
     return out_grad_tensors
@@ -403,14 +788,42 @@ class ExpandDims(Operation):
   def _get_bp_indices(self):
     return [0]
 
+  def _compute_shapes(self):
+    return [TensorShape(None)]
+
+    # validation
+    axis = None
+    if hasattr(self._input_list[1].op, "_value"):
+      axis = self._input_list[1].op._value.item()
+    if self._input_list[1].shape.level > 0 and self._input_list[1].shape[0] is not None:
+      assert self._input_list[1].shape[0] == 1
+
+    ndims = None
+    raw_shape = None
+    if self._input_list[0].shape.level > 0:
+      ndims = self._input_list[0].shape.ndims
+      raw_shape = list(self._input_list[0].shape.raw_shape)
+      if axis is not None:
+        assert -ndims - 1 <= axis <= ndims
+
+    # compute shapes
+    if axis is not None and raw_shape is not None:
+      axis = axis % ndims 
+      return [TensorShape(raw_shape[:axis] + [1] + raw_shape[axis:])]
+    elif raw_shape is not None:
+      return [TensorShape([None] * (ndims + 1))] 
+    else:
+      return [TensorShape(None)]
+
 
 class Squeeze(Operation):
 
-  def __init__(self, input_list, graph=None, axis=None, name=None):
+  def __init__(self, input_list, graph=None, axis=[], name=None):
+    if not len(axis):
+      self._axis = None
+    else:
+      self._axis = tuple(axis)
     super(Squeeze, self).__init__(graph=graph, input_list=input_list, name=name)
-    if isinstance(axis, int):
-      axis = (axis,)
-    self._axis = tuple(axis)
 
   def _run(self, inputs):
     outputs = np.squeeze(inputs, axis=self._axis) 
@@ -427,12 +840,60 @@ class Squeeze(Operation):
       out_grad_tensors = [bp_inputs.output(0)]
     return out_grad_tensors
 
+  def _compute_shapes(self):
+
+    # validation
+    ndims = None
+    if self._input_list[0].shape.level > 0:
+      ndims = self._input_list[0].shape.ndims
+      if self._axis is not None:
+        axis = np.asarray(self._axis)
+        assert np.logical_and(-ndims <= axis, axis < ndims).all()
+        axis = axis % ndims
+        assert all([i not in axis or s == 1 or s is None for i, s in enumerate(self._input_list[0].shape)]) 
+
+    # compute shapes
+    if ndims is not None: 
+      if self._input_list[0].shape.level == 2: 
+        if self._axis is None:
+          raw_shape = [s for s in self._input_list[0].shape if s != 1]
+        else:
+          axis = np.asarray(self._axis) % ndims
+          raw_shape = [s for i, s in enumerate(self._input_list[0].shape) if i not in axis]
+        return [TensorShape(raw_shape)]
+      else:
+        if self._axis is None:
+          raw_shape = None
+        else:
+          axis = np.asarray(self._axis) % ndims
+          raw_shape = [s for i, s in enumerate(self._input_list[0].shape) if i not in axis]
+        return [TensorShape(raw_shape)] 
+    else:
+      return [TensorShape(None)]
+
 
 class Fill(Operation):
 
   def _run(self, dims, value):
     outputs = np.ones(dims, dtype="float32") * value
     return outputs
+
+  def _compute_shapes(self):
+    # validation
+    if hasattr(self._input_list[0].op, "_value"):
+      target_shape = self._input_list[0].op._value
+      assert (target_shape > 0).all()
+    if self._input_list[0].shape.level > 0:
+      assert self._input_list[0].shape.ndims == 1
+
+    # compute shapes
+    if hasattr(self._input_list[0].op, "_value"):
+      target_shape = self._input_list[0].op._value.tolist()
+      return [TensorShape(target_shape)]
+    elif self._input_list[0].shape.level == 2:
+      return [TensorShape([None] * self._input_list[0].shape[0])]
+    else:
+      return [TensorShape(None)]
 
 
 class ListDiff(Operation):
@@ -441,3 +902,5 @@ class ListDiff(Operation):
     outputs = np.setdiff1d(x, y)
     return outputs
 
+  def _compute_shapes(self):
+    return [TensorShape([None])]

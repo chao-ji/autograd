@@ -4,6 +4,8 @@ import numpy as np
 from operation import Operation
 from generic_ops import Const
 
+from mixins import _ShapeAsIs
+
 
 class _Filters2DBase(Operation):
   """Base class for 2-D filters-based Operations (Conv2D, MaxPool2D, AvgPool2D,
@@ -945,7 +947,7 @@ class FusedBatchNormBackpropInputs(Operation):
 
   
 
-class Sigmoid(Operation):
+class Sigmoid(Operation, _ShapeAsIs):
   def _run(self, inputs):
     outputs = 1 / (1 + np.exp(-inputs)) 
     return outputs
@@ -983,7 +985,7 @@ class SigmoidGrad(Operation):
     return out_grad_tensors
 
 
-class Tanh(Operation):
+class Tanh(Operation, _ShapeAsIs):
   def _run(self, inputs):
     outputs = np.tanh(inputs)
     return outputs
@@ -1017,7 +1019,7 @@ class TanhGrad(Operation):
     return out_grad_tensors
 
 
-class Relu(Operation):
+class Relu(Operation, _ShapeAsIs):
   def _run(self, inputs):
     outputs = np.maximum(0, inputs)
     return outputs 
@@ -1091,7 +1093,7 @@ class SoftmaxCrossEntropyWithLogits(Operation):
   def num_outputs(self):
     return 2
 
-class LogSoftmax(Operation):
+class LogSoftmax(Operation, _ShapeAsIs):
   """
   tf.raw_ops.LogSoftmax(logits, name=None)
   """
@@ -1120,7 +1122,7 @@ class LogSoftmax(Operation):
     return out_grad_tensors
 
 
-class Softmax(Operation):
+class Softmax(Operation, _ShapeAsIs):
   def _run(self, inputs):
     logits = np.exp(inputs - np.max(inputs))
     softmax = logits / np.sum(logits, axis=-1, keepdims=True)

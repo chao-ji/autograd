@@ -142,12 +142,16 @@ class Operation(object):
 
   def _create_output_tensors(self):
     if not hasattr(self, "_outputs"):
-      self._outputs = [Tensor(self, i) for i in range(self.num_outputs)]
+      shapes = self._compute_shapes()
+      self._outputs = [Tensor(self, i, shape) for i, shape in zip(range(self.num_outputs), shapes)]
     return self._outputs
 
   def output(self, index=0):
     output_tensor = self._create_output_tensors()[index]
     return output_tensor
+
+  #def _compute_shapes(self):
+  #  return ["aa"] * self.num_outputs
 
 
   def _get_dependent_tensor(self, op, name, dic, tensor_index):
@@ -185,5 +189,4 @@ class Operation(object):
   def get_ones_tensor(self, tensor_index=0):
     from generic_ops import OnesLike
     return self._get_dependent_tensor(OnesLike, self.name+"_OnesLike", self._graph._oneslike_tensors, tensor_index)
-
 

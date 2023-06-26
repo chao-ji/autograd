@@ -3,6 +3,8 @@ import numpy as np
 
 from operation import Operation
 from generic_ops import Const
+from tensor_shape import TensorShape
+from mixins import _BinaryOp, _ReductionOp, _ShapeAsIs
 
 
 class BroadcastGradientArgs(Operation):
@@ -26,8 +28,18 @@ class BroadcastGradientArgs(Operation):
   def num_outputs(self):
     return 2
 
+  def _compute_shapes(self):
+    # validation
+    if self._input_list[0].shape.level > 0:
+      assert self._input_list[0].shape.ndims == 1
+    if self._input_list[1].shape.level > 0:
+      assert self._input_list[1].shape.ndims == 1
 
-class Add(Operation):
+    # compute shapes
+    return [TensorShape([None]), TensorShape([None])] 
+
+
+class Add(Operation, _BinaryOp):
   """AddV2."""
 
   def _run(self, x, y):
@@ -68,7 +80,7 @@ class Add(Operation):
     return out_grad_tensors
 
 
-class Neg(Operation):
+class Neg(Operation, _ShapeAsIs):
   """Neg"""
 
   def _run(self, x):
@@ -85,7 +97,7 @@ class Neg(Operation):
     return out_grad_tensors
 
 
-class Sub(Operation):
+class Sub(Operation, _BinaryOp):
   """Sub"""
 
   def _run(self, x, y):
@@ -132,7 +144,7 @@ class Sub(Operation):
     return out_grad_tensors
 
 
-class Mul(Operation):
+class Mul(Operation, _BinaryOp):
   """Mul"""
 
   def _run(self, x, y):
@@ -181,7 +193,7 @@ class Mul(Operation):
     return out_grad_tensors
 
 
-class RealDiv(Operation):
+class RealDiv(Operation, _BinaryOp):
   """RealDiv"""
 
   def _run(self, x, y):
@@ -238,7 +250,7 @@ class RealDiv(Operation):
     return out_grad_tensors
 
 
-class FloorDiv(Operation):
+class FloorDiv(Operation, _BinaryOp):
   """FloorDiv"""
 
   def _run(self, x, y):
@@ -246,7 +258,7 @@ class FloorDiv(Operation):
     return outputs
 
 
-class FloorMod(Operation):
+class FloorMod(Operation, _BinaryOp):
   """FloorMod"""
 
   def _run(self, x, y):
@@ -294,7 +306,7 @@ class FloorMod(Operation):
     return out_grad_tensors
 
 
-class Maximum(Operation):
+class Maximum(Operation, _BinaryOp):
   """Maximum"""
 
   def _run(self, x, y):
@@ -350,7 +362,7 @@ class Maximum(Operation):
     return out_grad_tensors
 
 
-class Minimum(Operation):
+class Minimum(Operation, _BinaryOp):
   """Minimum"""
   def _run(self, x, y):
     outputs = np.minimum(x, y)
@@ -405,9 +417,7 @@ class Minimum(Operation):
     return out_grad_tensors
 
 
-
-
-class DivNoNan(Operation):
+class DivNoNan(Operation, _BinaryOp):
   """DivNoNan"""
 
   def _run(self, x, y):
@@ -485,12 +495,20 @@ class AddN(Operation):
   def num_outputs(self):
     return len(self._input_list)
 
+  def _compute_shapes(self):
+    # validation
+    for tensor in self._input_list[1:]:
+      assert self._input_list[0].shape._compatible_with(tensor.shape)
 
-class Mean(Operation):
+    # compute shapes
+    return [TensorShape(tensor.shape.raw_shape)]
+
+
+class Mean(Operation, _ReductionOp):
 
   def __init__(self, input_list, graph=None, keepdims=False, name=None):
-    super(Mean, self).__init__(graph=graph, input_list=input_list, name=name)
     self._keepdims = keepdims
+    super(Mean, self).__init__(graph=graph, input_list=input_list, name=name)
 
   def _run(self, inputs, reduction_indices):
     outputs = np.mean(
@@ -563,11 +581,11 @@ class Mean(Operation):
     return [0]
 
 
-class Sum(Operation):
+class Sum(Operation, _ReductionOp):
 
   def __init__(self, input_list, graph=None, keepdims=False, name=None):
-    super(Sum, self).__init__(graph=graph, input_list=input_list, name=name)
     self._keepdims = keepdims
+    super(Sum, self).__init__(graph=graph, input_list=input_list, name=name)
 
   def _run(self, inputs, reduction_indices):
     outputs = np.sum(
@@ -615,11 +633,11 @@ class Sum(Operation):
     return [0]
 
 
-class Prod(Operation):
+class Prod(Operation, _ReductionOp):
 
   def __init__(self, input_list, graph=None, keepdims=False, name=None):
-    super(Prod, self).__init__(graph=graph, input_list=input_list, name=name)
     self._keepdims = keepdims
+    super(Prod, self).__init__(graph=graph, input_list=input_list, name=name)
 
   def _run(self, inputs, reduction_indices):
     outputs = np.prod(
@@ -723,9 +741,9 @@ class MatMul(Operation):
                transpose_y=False,
                name=None
     ):
-    super(MatMul, self).__init__(graph=graph, name=name, input_list=input_list)
     self._transpose_x = transpose_x
     self._transpose_y = transpose_y
+    super(MatMul, self).__init__(graph=graph, name=name, input_list=input_list)
 
   def _run(self, x, y):
     xx = x.T if self._transpose_x else x
@@ -750,8 +768,26 @@ class MatMul(Operation):
 
     return out_grad_tensors
 
+  def _compute_shapes(self):
+    if self._input_list[0].shape.ndims is None or self._input_list[1].shape.ndims is None:
+      return [TensorShape([None, None])]
+
+    assert self._input_list[0].shape.ndims == self._input_list[1].shape.ndims == 2
+    if self._transpose_x:
+      x_shape = self._input_list[0].shape.raw_shape[::-1]
+    else:
+      x_shape = self._input_list[0].shape.raw_shape
+    if self._transpose_y:
+      y_shape = self._input_list[1].shape.raw_shape[::-1]
+    else:
+      y_shape = self._input_list[1].shape.raw_shape
+    assert x_shape[1] is None or y_shape[0] is None or x_shape[1] == y_shape[0]
+
+    return [TensorShape([x_shape[0], y_shape[1]])]
+
 
 class BatchMatMul(Operation):
+  """BatchMatMulV2"""
 
   def __init__(
         self,
@@ -761,11 +797,11 @@ class BatchMatMul(Operation):
         transpose_y=False,
         name=None
     ):
+    self._transpose_x = transpose_x
+    self._transpose_y = transpose_y
     super(BatchMatMul, self).__init__(
         graph=graph, name=name, input_list=input_list
     )
-    self._transpose_x = transpose_x
-    self._transpose_y = transpose_y
 
   def _run(self, x, y):
     x_multiples, y_multiples = [], []
@@ -895,8 +931,47 @@ class BatchMatMul(Operation):
 
     return out_grad_tensors
 
+  def _compute_shapes(self):
+    if self._input_list[0].shape.ndims is None or self._input_list[1].shape.ndims is None:
+      return TensorShape(None)
 
-class SquaredDifference(Operation):
+    x_shape = self._input_list[0].shape.raw_shape
+    y_shape = self._input_list[1].shape.raw_shape 
+
+    assert len(x_shape) >= 2 and len(y_shape) >= 2
+
+    shape = []
+    for i, j in zip(x_shape[::-1][2:], y_shape[::-1][2:]):
+      if i is not None and i is not None:
+        if i == 1:
+          shape.append(j)
+        elif j == 1:
+          shape.append(i)
+        else:
+          assert i == j
+          shape.append(i)
+      elif i is not None:
+        shape.append(None if i == 1 else i)
+      elif j is not Nnoe:
+        shape.append(None if j == 1 else j)
+      else:
+        shape.append(None)
+
+    if len(x_shape) < len(y_shape):
+      shape = list(y_shape[:-2-len(shape)]) + shape[::-1]
+    else:
+      shape = list(x_shape[:-2-len(shape)]) + shape[::-1] 
+
+    x_slice_shape = x_shape[-2:][::-1] if self._transpose_x else x_shape[-2:]
+    y_slice_shape = y_shape[-2:][::-1] if self._transpose_y else y_shape[-2:]
+    
+    assert x_slice_shape[1] is None or y_slice_shape[0] is None or x_slice_shape[1] == y_slice_shape[0]
+
+    shape = shape + [x_slice_shape[0], y_slice_shape[1]]
+    return [TensorShape(shape)]
+
+
+class SquaredDifference(Operation, _BinaryOp):
   def _run(self, x, y):
     outputs = np.square(x - y)
     return outputs 
@@ -945,7 +1020,7 @@ class SquaredDifference(Operation):
 
 
 
-class Square(Operation):
+class Square(Operation, _ShapeAsIs):
 
   def _run(self, inputs):
     outputs = np.square(inputs)
@@ -966,42 +1041,42 @@ class Square(Operation):
     return out_grad_tensors
 
 
-class GreaterEqual(Operation):
+class GreaterEqual(Operation, _BinaryOp):
 
   def _run(self, x, y):
     outputs = np.greater_equal(x, y)
     return outputs
 
 
-class Greater(Operation):
+class Greater(Operation, _BinaryOp):
 
   def _run(self, x, y):
     outputs = np.greater(x, y)
     return outputs
 
 
-class LessEqual(Operation):
+class LessEqual(Operation, _BinaryOp):
 
   def _run(self, x, y):
     outputs = np.less_equal(x, y)
     return outputs
 
 
-class Less(Operation):
+class Less(Operation, _BinaryOp):
 
   def _run(self, x, y):
     outputs = np.less(x, y)
     return outputs
 
 
-class Equal(Operation):
+class Equal(Operation, _BinaryOp):
 
   def _run(self, x, y):
     outputs = np.equal(x, y)
     return outputs
 
 
-class NotEqual(Operation):
+class NotEqual(Operation, _BinaryOp):
 
   def _run(self, x, y):
     outputs = np.not_equal(x, y)
@@ -1052,6 +1127,9 @@ class Cumsum(Operation):
 
   def _get_bp_indices(self):
     return [0]
+
+  def _compute_shapes(self):
+    return [TensorShape(self._input_list[0].shape.raw_shape)]
 
 
 class Cumprod(Operation):
@@ -1111,8 +1189,11 @@ class Cumprod(Operation):
   def _get_bp_indices(self):
     return [0]
 
+  def _compute_shapes(self):
+    return [TensorShape(self._input_list[0].shape.raw_shape)]
 
-class Exp(Operation):
+
+class Exp(Operation, _ShapeAsIs):
 
   def _run(self, inputs):
     outputs = np.exp(inputs)
@@ -1127,7 +1208,7 @@ class Exp(Operation):
     return out_grad_tensors
 
 
-class Log1p(Operation):
+class Log1p(Operation, _ShapeAsIs):
 
   def _run(self, inputs):
     outputs = np.log(np.add(1, inputs))
@@ -1148,7 +1229,7 @@ class Log1p(Operation):
     return out_grad_tensors
 
 
-class Log(Operation):
+class Log(Operation, _ShapeAsIs):
   def _run(self, inputs):
     outputs = np.log(inputs)
     return outputs
@@ -1162,7 +1243,7 @@ class Log(Operation):
     return out_grad_tensors
 
 
-class Reciprocal(Operation):
+class Reciprocal(Operation, _ShapeAsIs):
 
   def _run(self, inputs):
     outputs = 1 / inputs
@@ -1195,3 +1276,7 @@ class ReciprocalGrad(Operation):
       out_grad_tensors = [bp_outputs.output(0), bp_grads.output(0)]
 
     return out_grad_tensors
+
+  def _compute_shapes(self):
+    return [TensorShape(self._input_list[0].shape.raw_shape)]
+

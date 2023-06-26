@@ -6,8 +6,6 @@ import contextlib
 from default_stack import _DEFAULT_GRAPH_STACK #, _DEFAULT_NAME_SCOPE_STACK
 
 
-OpInfo = collections.namedtuple("OpInfo", ["id", "op", "type", "name"])
-
 
 def get_default_graph():
   if not len(_DEFAULT_GRAPH_STACK):

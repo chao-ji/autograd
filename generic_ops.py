@@ -1,16 +1,21 @@
 from operation import Operation
-
+from tensor_shape import TensorShape
 import numpy as np
+
+from mixins import _ShapeAsIs, _ScalarShape
 
 
 class Const(Operation):
   def __init__(self, value, graph=None, name=None):
-    super(Const, self).__init__(graph=graph, name=name)
     self._value = value
+    super(Const, self).__init__(graph=graph, name=name)
 
   def _run(self):
     """Returns numpy array."""
     return self._value   
+
+  def _compute_shapes(self):
+    return [TensorShape(list(self._value.shape))]
 
 
 class Placeholder(Operation):
@@ -23,26 +28,13 @@ class Variable(Operation):
     pass
 
 
-
-class Zeros(Operation):
-  def _run(self, tensor_shape):
-    outputs = np.zeros(tensor_shape, dtype="float32")
-    return outputs
-
-
-class Ones(Operation):
-  def _run(self, tensor_shape):
-    outputs = np.ones(tensor_shape, dtype="float32")
-    return outputs
-
-
-class ZerosLike(Operation):
+class ZerosLike(Operation, _ShapeAsIs):
   def _run(self, tensor_value):
     outputs = np.zeros_like(tensor_value, dtype="float32")
     return outputs
 
 
-class OnesLike(Operation):
+class OnesLike(Operation, _ShapeAsIs):
   def _run(self, tensor_value):
     outputs = np.ones_like(tensor_value, dtype="float32")
     return outputs
@@ -53,14 +45,20 @@ class Shape(Operation):
     outputs = [np.asarray(tensor_value.shape) for tensor_value in tensor_values]
     return outputs
 
+  def _compute_shapes(self):
+    return [TensorShape([None]) if tensor.shape.ndims is None else 
+        TensorShape([tensor.shape.ndims]) for tensor in self._input_list
+    ]
 
-class Size(Operation):
+
+class Size(Operation, _ScalarShape):
   def _run(self, tensor_value):
     outputs = np.size(tensor_value)
     return outputs
 
 
-class Rank(Operation):
+class Rank(Operation, _ScalarShape):
   def _run(self, tensor_value):
     outputs = len(tensor_value.shape)
     return outputs
+
