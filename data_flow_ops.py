@@ -53,7 +53,6 @@ class DynamicStitch(Operation):
     return bp_indices
 
   def _compute_shapes(self):
-    #return [TensorShape(None)]
     # validation
     assert len(self._input_list) % 2 == 0  
 
@@ -341,13 +340,34 @@ class Select(Operation):
 
   def _compute_shapes(self):
     # validation
-    assert (self._input_list[0]._broadcastable_with(self._input_list[1]) and 
-        self._input_list[0]._broadcastable_with(self._input_list[2]) and 
-        self._input_list[1]._broadcastable_with(self._input_list[2])) 
+    c_shape = self._input_list[0].shape
+    x_shape = self._input_list[1].shape
+    y_shape = self._input_list[2].shape
+
+    assert (c_shape._broadcastable_with(x_shape) and 
+        c_shape._broadcastable_with(y_shape) and 
+        x_shape._broadcastable_with(y_shape)) 
 
     # compute shapes
-    if self._input_list[0].shape.level > 0 and self._input_list[1].shape.level > 0 and self._input_list[2].shape.level > 0:
-     
+    if c_shape.level > 0 and x_shape.level > 0 and y_shape.level > 0:
+      max_ndims = max(c_shape.ndims, x_shape.ndims, y_shape.ndims)
+      c_shape = [None] * (max_ndims - c_shape.ndims) + list(c_shape.raw_shape)
+      x_shape = [None] * (max_ndims - x_shape.ndims) + list(x_shape.raw_shape)
+      y_shape = [None] * (max_ndims - y_shape.ndims) + list(y_shape.raw_shape)
+
+      raw_shape = []
+      for c, x, y in zip(c_shape, x_shape, y_shape):
+        size = set([c, x, y])
+        if len(size) == 1 and None in size:
+          raw_shape.append(None)
+        else:
+          size = size - set([None])
+          if len(size) == 1 and 1 in size:
+            raw_shape.append(1)
+          else:
+            size = size - set([1])
+            raw_shape.append(list(size)[0])
+      return [TensorShape(raw_shape)]
     else:
       return [TensorShape(None)]
 

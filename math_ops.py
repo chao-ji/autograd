@@ -4,7 +4,7 @@ import numpy as np
 from operation import Operation
 from generic_ops import Const
 from tensor_shape import TensorShape
-from mixins import _BinaryOp, _ReductionOp, _ShapeAsIs
+from mixins import _BinaryOp, _ReductionOp, _ShapeAsIs, _PickFirstAmongCompatibleShapes
 
 
 class BroadcastGradientArgs(Operation):
@@ -476,7 +476,7 @@ class DivNoNan(Operation, _BinaryOp):
     return out_grad_tensors
 
 
-class AddN(Operation):
+class AddN(Operation, _PickFirstAmongCompatibleShapes):
   """AddN"""
 
   def _run(self, *input_tensor_values):
@@ -494,14 +494,6 @@ class AddN(Operation):
   @property
   def num_outputs(self):
     return len(self._input_list)
-
-  def _compute_shapes(self):
-    # validation
-    for tensor in self._input_list[1:]:
-      assert self._input_list[0].shape._compatible_with(tensor.shape)
-
-    # compute shapes
-    return [TensorShape(tensor.shape.raw_shape)]
 
 
 class Mean(Operation, _ReductionOp):
@@ -769,7 +761,7 @@ class MatMul(Operation):
     return out_grad_tensors
 
   def _compute_shapes(self):
-    if self._input_list[0].shape.ndims is None or self._input_list[1].shape.ndims is None:
+    if self._input_list[0].shape.level == 0 or self._input_list[1].shape.level == 0:
       return [TensorShape([None, None])]
 
     assert self._input_list[0].shape.ndims == self._input_list[1].shape.ndims == 2
@@ -783,7 +775,10 @@ class MatMul(Operation):
       y_shape = self._input_list[1].shape.raw_shape
     assert x_shape[1] is None or y_shape[0] is None or x_shape[1] == y_shape[0]
 
-    return [TensorShape([x_shape[0], y_shape[1]])]
+    raw_shape = [x_shape[0], y_shape[1]]
+    if self._transpose_x:
+      raw_shape = raw_shape[::-1]
+    return [TensorShape(raw_shape)]
 
 
 class BatchMatMul(Operation):
@@ -932,8 +927,8 @@ class BatchMatMul(Operation):
     return out_grad_tensors
 
   def _compute_shapes(self):
-    if self._input_list[0].shape.ndims is None or self._input_list[1].shape.ndims is None:
-      return TensorShape(None)
+    if self._input_list[0].shape.level == 0 or self._input_list[1].shape.level == 0:
+      return [TensorShape(None)]
 
     x_shape = self._input_list[0].shape.raw_shape
     y_shape = self._input_list[1].shape.raw_shape 
@@ -1257,7 +1252,7 @@ class Reciprocal(Operation, _ShapeAsIs):
     return out_grad_tensors
 
 
-class ReciprocalGrad(Operation):
+class ReciprocalGrad(Operation, _PickFirstAmongCompatibleShapes):
 
   def _run(self, outputs, grads):
     outputs_inputs_grads = -grads * outputs * outputs
@@ -1276,7 +1271,4 @@ class ReciprocalGrad(Operation):
       out_grad_tensors = [bp_outputs.output(0), bp_grads.output(0)]
 
     return out_grad_tensors
-
-  def _compute_shapes(self):
-    return [TensorShape(self._input_list[0].shape.raw_shape)]
 

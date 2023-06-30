@@ -6,7 +6,7 @@ from operation import Operation
 from generic_ops import Const
 from math_ops import Sum, Mean
 from tensor_shape import TensorShape
-from mixins import _ShapeAsIs
+from mixins import _ShapeAsIs, _TensorShapeAsInput
 
 
 class Reshape(Operation):
@@ -112,6 +112,12 @@ class Range(Operation):
     return outputs
 
   def _compute_shapes(self):
+    # validation
+    for tensor in self._input_list:
+      if tensor.shape.level > 0:
+        assert tensor.shape.ndims == 0
+
+    # compute shapes
     return [TensorShape([None])]
 
 
@@ -326,6 +332,7 @@ class StridedSlice(Operation):
         assert tensor.shape.ndims == 1
         if tensor.shape.level == 2:
           if ndims is not None:
+            print(ndims, tensor.shape[0])
             assert ndims == tensor.shape[0] 
           else:
             ndims = tensor.shape[0]
@@ -349,8 +356,10 @@ class StridedSlice(Operation):
           e = np.where(e < 0, e % i, e)
 
           r = np.arange(b, e, s)
-          
-          raw_shape.append(min(r.max(), i) - max(r.min(), 0))
+         
+          #raw_shape.append(min(r.max() + 1, i) - max(r.min(), 0))
+          raw_shape.append(len(set(r.tolist()).intersection(set(np.arange(0, i).tolist()))))
+
       return [TensorShape(raw_shape)]
     elif self._input_list[0].shape.level > 0:
       ndims = self._input_list[0].shape.ndims
@@ -758,8 +767,8 @@ class Pad(Operation):
         else:
           raw_shape.append(i + padding[0] + padding[1])
       return [TensorShape(raw_shape)]
-    elif self._input_list[1].shape.level > 0:
-      ndims = self._input_list[1].shape.ndims
+    elif self._input_list[0].shape.level > 0:
+      ndims = self._input_list[0].shape.ndims
       return [TensorShape([None] * ndims)]
     elif self._input_list[1].shape.level > 0 and self._input_list[1].shape[0] is not None:
       ndims = self._input_list[1].shape[0]
@@ -789,14 +798,19 @@ class ExpandDims(Operation):
     return [0]
 
   def _compute_shapes(self):
-    return [TensorShape(None)]
+    #return [TensorShape(None)]
 
     # validation
+    if self._input_list[1].shape.level > 0:
+      assert self._input_list[1].shape.ndims <= 1
+      if self._input_list[1].shape.ndims == 1 and self._input_list[1].shape[0] is not None:
+        assert self._input_list[1].shape[0] == 1
+
     axis = None
     if hasattr(self._input_list[1].op, "_value"):
-      axis = self._input_list[1].op._value.item()
-    if self._input_list[1].shape.level > 0 and self._input_list[1].shape[0] is not None:
-      assert self._input_list[1].shape[0] == 1
+      axis = self._input_list[1].op._value
+      assert axis.size == 1
+      axis = axis.item()
 
     ndims = None
     raw_shape = None
@@ -808,7 +822,7 @@ class ExpandDims(Operation):
 
     # compute shapes
     if axis is not None and raw_shape is not None:
-      axis = axis % ndims 
+      axis = axis % (ndims + 1) 
       return [TensorShape(raw_shape[:axis] + [1] + raw_shape[axis:])]
     elif raw_shape is not None:
       return [TensorShape([None] * (ndims + 1))] 
@@ -872,10 +886,10 @@ class Squeeze(Operation):
       return [TensorShape(None)]
 
 
-class Fill(Operation):
+class Fill(Operation, _TensorShapeAsInput):
 
   def _run(self, dims, value):
-    outputs = np.ones(dims, dtype="float32") * value
+    outputs = np.ones(dims, dtype=value.dtype) * value
     return outputs
 
   def _compute_shapes(self):

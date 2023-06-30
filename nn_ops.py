@@ -4,7 +4,8 @@ import numpy as np
 from operation import Operation
 from generic_ops import Const
 
-from mixins import _ShapeAsIs
+from tensor_shape import TensorShape
+from mixins import _ShapeAsIs, _PickFirstAmongCompatibleShapes
 
 
 class _Filters2DBase(Operation):
@@ -19,10 +20,10 @@ class _Filters2DBase(Operation):
       strides (tuple): strides in height and width dimension.
       padding (string): padding scheme (either "SAME" or "VALID").
     """
-    super(_Filters2DBase, self).__init__(
-        graph=graph, input_list=input_list, name=name)
     self._strides = strides
     self._padding = padding
+    super(_Filters2DBase, self).__init__(
+        graph=graph, input_list=input_list, name=name)
 
   def _get_shapes(self, inputs_shape, filters_size):
     """Compute the spatial dimensions of the outputs tensor, and the padding
@@ -311,6 +312,13 @@ class _Filters2DBase(Operation):
     inputs_grads = self._unpad(inputs_grads, padding)
     return inputs_grads
 
+  def _compute_spatial_size(self, input_size, kernel_size, stride_size, padding):
+    if padding == "SAME":
+      out_size = int(np.ceil(input_size / stride_size))
+    else:
+      out_size = int(np.ceil((input_size - kernel_size + 1) / stride_size))
+    return out_size
+
 
 class Conv2D(_Filters2DBase):
   """Regular 2D convolution."""
@@ -380,6 +388,40 @@ class Conv2D(_Filters2DBase):
       out_grad_tensors = [bp_inputs.output(0), bp_filters.output(0)]
     return out_grad_tensors
 
+  def _compute_shapes(self):
+    # validation
+    inputs_shape = self._input_list[0].shape
+    filters_shape = self._input_list[1].shape
+
+    if inputs_shape.level > 0:
+      assert inputs_shape.ndims == 4
+    if filters_shape.level > 0:
+      assert filters_shape.ndims == 4
+    if (inputs_shape.level > 0 and inputs_shape[3] is not None and
+        filters_shape.level > 0 and filters_shape[2] is not None
+      ):
+      assert inputs_shape[3] == filters_shape[2]
+
+    # compute shapes
+    batch_size = None
+    if batch_size is None and inputs_shape.level > 0 and inputs_shape[0] is not None:
+      batch_size = inputs_shape[0]
+    num_channels = None
+    if filters_shape.level > 0 and filters_shape[3] is not None:
+      num_channels = filters_shape[3]
+    height, width = None, None
+    if (inputs_shape.level > 0 and filters_shape.level > 0 and
+        inputs_shape[1] is not None and filters_shape[0] is not None
+      ):
+      height = self._compute_spatial_size(
+        inputs_shape[1], filters_shape[0], self._strides[0], self._padding)
+    if (inputs_shape.level > 0 and filters_shape.level > 0 and
+        inputs_shape[2] is not None and filters_shape[1] is not None
+      ):
+      width = self._compute_spatial_size(
+        inputs_shape[2], filters_shape[1], self._strides[1], self._padding)
+    return [TensorShape([batch_size, height, width, num_channels])]
+
 
 class Conv2DBackpropInput(_Filters2DBase):
   """Backprop the gradients from the outputs of `Conv2D` to the input argument
@@ -440,6 +482,43 @@ class Conv2DBackpropInput(_Filters2DBase):
 
   def _get_bp_indices(self):
     return [0, 1]
+
+  def _compute_shapes(self):
+    # validation
+    filters_shape = self._input_list[0].shape
+    grads_shape = self._input_list[1].shape
+    inputs_shape = self._input_list[2]
+
+    if filters_shape.level > 0:
+      assert filters_shape.ndims == 4
+    if grads_shape.level > 0:
+      assert grads_shape.ndims == 4
+    if inputs_shape.shape.level > 0:
+      inputs_shape.shape.ndims == 1
+
+    if (filters_shape.level > 0 and grads_shape.level > 0 and
+        filters_shape[3] is not None and grads_shape[3] is not None
+      ):
+      assert filters_shape[3] == grads_shape[3]
+
+    if hasattr(inputs_shape.op, "_value"):
+      if filters_shape.level > 0 and filters_shape[2] is not None: 
+        assert filters_shape[2] == inputs_shape.op._value[3]
+      if grads_shape.level > 0 and grads_shape[0] is not None: 
+        assert grads_shape[0] == inputs_shape.op._value[0]
+
+    # compute shapes
+    batch_size, height, width, in_channels = None, None, None, None
+
+    if hasattr(inputs_shape.op, "_value"):
+      batch_size, height, width, in_channels = inputs_shape.op._value
+
+    if grads_shape.level > 0 and grads_shape[0] is not None and batch_size is None:
+      batch_size = grads_shape[0]
+
+    if filters_shape.level > 0 and filters_shape[2] is not None and in_channels is None:
+      in_channels = filters_shape[2]     
+    return [TensorShape([batch_size, height, width, in_channels])]
 
 
 class Conv2DBackpropFilter(_Filters2DBase):
@@ -504,6 +583,43 @@ class Conv2DBackpropFilter(_Filters2DBase):
   def _get_bp_indices(self):
     return [0, 1]
 
+  def _compute_shapes(self):
+    # validation
+    inputs_shape = self._input_list[0].shape
+    grads_shape = self._input_list[1].shape
+    filters_shape = self._input_list[2]
+
+    if inputs_shape.level > 0:
+      assert inputs_shape.ndims == 4
+    if grads_shape.level > 0:
+      assert grads_shape.ndims == 4
+    if filters_shape.shape.level > 0:
+      filters_shape.shape.ndims == 1
+
+    if (inputs_shape.level > 0 and grads_shape.level > 0 and
+        inputs_shape[0] is not None and grads_shape[0] is not None
+      ):
+      assert inputs_shape[0] == grads_shape[0]
+
+    if hasattr(filters_shape.op, "_value"):
+      if inputs_shape.level > 0 and inputs_shape[3] is not None:
+        assert inputs_shape[3] == filters_shape.op._value[2]
+      if grads_shape.level > 0 and grads_shape[3] is not None:
+        assert grads_shape[3] == filters_shape.op._value[3]
+
+    # compute shapes
+    filters_height, filters_width, in_channels, out_channels = None, None, None, None
+    if hasattr(filters_shape.op, "_value"):
+      filters_height, filters_width, in_channels, out_channels = filters_shape.op._value
+
+    if inputs_shape.level > 0 and inputs_shape[3] is not None and in_channels is None:
+      in_channels = inputs_shape[3] 
+    if grads_shape.level > 0 and grads_shape[3] is not None and out_channels is None:
+      out_channels = grads_shape[3]
+
+    filters_height, filters_width, in_channels, out_channels = None, None, None, None
+    return [TensorShape([filters_height, filters_width, in_channels, out_channels])]
+
 
 class _Pooling2DBase(_Filters2DBase):
   """Base class for 2D pooling Operations (MaxPool2D, AvgPool2D, etc.)."""
@@ -520,6 +636,7 @@ class _Pooling2DBase(_Filters2DBase):
       filters_size (tuple): filters size in height and width dimension.
       padding (string): padding scheme (either "SAME" or "VALID").
     """
+    self._filters_size = filters_size
     super(_Pooling2DBase, self).__init__(
         strides=strides,
         padding=padding,
@@ -527,8 +644,29 @@ class _Pooling2DBase(_Filters2DBase):
         input_list=input_list,
         name=name
     )
-    self._filters_size = filters_size
     self._pad_value = np.nan
+
+  def _compute_shapes(self):
+    # validation
+    inputs_shape = self._input_list[0].shape
+
+    if inputs_shape.level > 0:
+      assert inputs_shape.ndims == 4
+
+    # compute shapes
+    batch_size, height, width, num_channels = None, None, None, None
+    if inputs_shape.level > 0:
+      if inputs_shape[0] is not None:
+        batch_size = inputs_shape[0]
+      if inputs_shape[3] is not None:
+        num_channels = inputs_shape[3]
+      if inputs_shape[1] is not None:
+        height = self._compute_spatial_size(
+            inputs_shape[1], self._filters_size[0], self._strides[0], self._padding)
+      if inputs_shape[2] is not None:
+        width = self._compute_spatial_size(
+            inputs_shape[2], self._filters_size[1], self._strides[1], self._padding)
+    return [TensorShape([batch_size, height, width, num_channels])]
 
 
 class MaxPool2D(_Pooling2DBase):
@@ -647,6 +785,42 @@ class MaxPool2DGrad(_Pooling2DBase):
       out_grad_tensors = [bp_inputs.output(0), bp_grads.output(0)]
     return out_grad_tensors
 
+  def _compute_shapes(self):
+    # validation
+    inputs_shape = self._input_list[0].shape
+    grads_shape = self._input_list[1].shape
+
+    if inputs_shape.level > 0:
+      assert inputs_shape.ndims == 4
+    if grads_shape.level > 0:
+      assert grads_shape.ndims == 4
+
+    if (inputs_shape.level > 0 and grads_shape.level > 0 and 
+        inputs_shape[0] is not None and grads_shape[0] is not None and
+        inputs_shape[3] is not None and grads_shape[3] is not None):
+      assert inputs_shape[0] == grads_shape[0]
+      assert inputs_shape[3] == grads_shape[3]
+ 
+    # compute shapes
+    batch_size, height, width, num_channels = None, None, None, None
+    if inputs_shape.level > 0:
+      if inputs_shape[0] is not None:
+        batch_size = inputs_shape[0] 
+      if inputs_shape[1] is not None:
+        height = inputs_shape[1]
+      if inputs_shape[2] is not None:
+        width = inputs_shape[2]
+      if inputs_shape[3] is not None:
+        num_channels = inputs_shape[3]
+
+    if grads_shape.level > 0:
+      if batch_size is None and grads_shape[0] is not None:
+        batch_size = grads_shape[0]
+      if num_channels is None and grads_shape[3] is not None:
+        num_channels = grads_shape[3]
+
+    return [TensorShape([batch_size, height, width, num_channels])]
+
 
 class MaxPool2DGradGrad(_Pooling2DBase):
   """Backprop the gradients from the outputs of `MaxPool2DGrad` to the input
@@ -660,8 +834,7 @@ class MaxPool2DGradGrad(_Pooling2DBase):
       inputs (tensor): 4D tensor of shape [batch_size, height, width,
         in_channels], the inputs tensor to be max-pooled. 
       inputs_grads_grads (tensor): 4D tensor of shape [batch_size, height, width
-        , in_channels], gradients w.r.t. the input argument `inputs_grads` of
-        `MaxPool2DGrad`.
+        , in_channels], gradients w.r.t. the outputs of `MaxPool2DGrad`.
 
     Returns:
       grads_grads (tensor): 4D tensor of shape [batch_size, out_height,
@@ -721,6 +894,31 @@ class MaxPool2DGradGrad(_Pooling2DBase):
 
     return out_grad_tensors
 
+  def _compute_shapes(self):
+    # validation
+    inputs_shape = self._input_list[0].shape 
+    inputs_grads_grads_shape = self._input_list[1].shape
+
+    if inputs_shape.level > 0:
+      assert inputs_shape.ndims == 4
+    assert inputs_shape._compatible_with(inputs_grads_grads_shape)
+
+    # compute shapes
+    batch_size, height, width, num_channels = None, None, None, None
+    for shape in (inputs_shape, inputs_grads_grads_shape):
+      if shape.level > 0:
+        if batch_size is None and shape[0] is not None:
+          batch_size = shape[0]
+        if num_channels is None and shape[3] is not None:
+          num_channels = shape[3]
+        if height is None and shape[1] is not None:
+          height = self._compute_spatial_size(
+              shape[1], self._filters_size[0], self._strides[0], self._padding)
+        if width is None and shape[2] is not None:
+          width = self._compute_spatial_size(
+              shape[2], self._filters_size[1], self._strides[1], self._padding)
+    return [TensorShape([batch_size, height, width, num_channels])]
+ 
 
 class AvgPool2D(_Pooling2DBase):
   """Regular 2D average pooling."""
@@ -779,7 +977,7 @@ class AvgPool2DGrad(_Pooling2DBase):
     Args:
       grads (tensor): 4D tensor of shape [batch_size, out_height, out_width,
         in_channels], gradients w.r.t. the outputs tensor.
-      inputs_shape (tuple): 4-tuple storing shape of the inputs tensor as [
+      inputs_shape (tensor): 4-tuple storing shape of the inputs tensor as [
         batch_size, height, width, in_channels]. 
 
     Returns:
@@ -869,6 +1067,42 @@ class AvgPool2DGrad(_Pooling2DBase):
 
   def _get_bp_indices(self):
     return [0]
+
+  def _compute_shapes(self):
+    # validation
+    grads_shape = self._input_list[0].shape
+    inputs_shape = self._input_list[1]
+
+    if grads_shape.level > 0:
+      assert grads_shape.ndims == 4
+
+    if inputs_shape.shape.level > 0:
+      assert inputs_shape.shape.ndims == 1
+
+    if (grads_shape.level > 0 and
+        hasattr(inputs_shape.op, "_value") and 
+        grads_shape[0] is not None and 
+        grads_shape[3] is not None):
+      assert grads_shape[0] == inputs_shape.op._value[0]
+      assert grads_shape[3] == inputs_shape.op._value[3]
+
+    # compute shapes
+    batch_size, height, width, num_channels = None, None, None, None
+    if grads_shape.level > 0:
+      if grads_shape[0] is not None:
+        batch_size = grads_shape[0]
+      if grads_shape[3] is not None:
+        num_channels = grads_shape[3]
+
+    if hasattr(inputs_shape.op, "_value"):
+      if batch_size is None:
+        batch_size = inputs_shape.op._value[0]
+      if num_channels is None:
+        num_channels = inputs_shape.op._value[3]
+      height = inputs_shape.op._value[1]
+      width = inputs_shape.op._value[2]
+
+    return [TensorShape([batch_size, height, width, num_channels])]
 
 
 class FusedBatchNorm(Operation):
@@ -961,7 +1195,7 @@ class Sigmoid(Operation, _ShapeAsIs):
     return out_grad_tensors
 
 
-class SigmoidGrad(Operation):
+class SigmoidGrad(Operation, _PickFirstAmongCompatibleShapes):
   def _run(self, outputs, grads):
     outputs_inputs_grads = outputs * (1 - outputs) * grads
     return outputs_inputs_grads
@@ -984,6 +1218,9 @@ class SigmoidGrad(Operation):
     out_grad_tensors = [bp_outputs.output(0), bp_grads.output(0)]
     return out_grad_tensors
 
+  def _compute_shapes(self):
+    return [TensorShape(self._input_list[0].shape.raw_shape)] 
+
 
 class Tanh(Operation, _ShapeAsIs):
   def _run(self, inputs):
@@ -997,7 +1234,7 @@ class Tanh(Operation, _ShapeAsIs):
     return out_grad_tensors
 
 
-class TanhGrad(Operation):
+class TanhGrad(Operation, _PickFirstAmongCompatibleShapes):
   def _run(self, outputs, grads):
     outputs_inputs_grads = (1 - outputs * outputs) * grads
     return outputs_inputs_grads    
@@ -1031,7 +1268,7 @@ class Relu(Operation, _ShapeAsIs):
     return out_grad_tensors
 
 
-class ReluGrad(Operation):
+class ReluGrad(Operation, _PickFirstAmongCompatibleShapes):
   def _run(self, outputs, grads):
     outputs_inputs_grads = np.where(outputs <= 0, 0, grads)
     return outputs_inputs_grads
@@ -1092,6 +1329,24 @@ class SoftmaxCrossEntropyWithLogits(Operation):
   @property
   def num_outputs(self):
     return 2
+
+  def _compute_shapes(self):
+    # validation
+    logits_shape = self._input_list[0].shape
+    labels_shape = self._input_list[1].shape
+    if logits_shape.level > 0:
+      assert logits_shape.ndims == 2
+
+    if labels_shape.level > 0:
+      assert labels_shape.ndims == 2
+
+    assert logits_shape._compatible_with(labels_shape)
+    # compute shapes
+    shape = TensorShape([None, None])
+    shape._merge(logits_shape)
+    shape._merge(labels_shape)
+    return [TensorShape(list(shape.raw_shape[:1])), TensorShape(list(shape.raw_shape))] 
+
 
 class LogSoftmax(Operation, _ShapeAsIs):
   """

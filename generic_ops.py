@@ -46,7 +46,7 @@ class Shape(Operation):
     return outputs
 
   def _compute_shapes(self):
-    return [TensorShape([None]) if tensor.shape.ndims is None else 
+    return [TensorShape([None]) if tensor.shape.level == 0 else 
         TensorShape([tensor.shape.ndims]) for tensor in self._input_list
     ]
 

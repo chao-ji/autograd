@@ -60,6 +60,11 @@ class Operation(object):
     else:
       self._graph._runtime._values[self.id].append(outputs)
 
+    #print(self)
+    #print("a", [o.shape if hasattr(o, "shape") else () for o in self._graph._runtime._values[self.id]]) 
+    #print("b", [o.shape.raw_shape for o in self._outputs])
+    #print()
+
   def _compute_expected_backprops(self):
     queue = [self]
     expected_backprops = dict()
@@ -112,9 +117,7 @@ class Operation(object):
           grad_tensors = []
           for k in sorted(grad_accumulate[op.id].keys()):
             if len(grad_accumulate[op.id][k]) > 1:
-              grad_tensor = Tensor(
-                  AddN(input_list=grad_accumulate[op.id][k], graph=self._graph), 0
-              )
+              grad_tensor = AddN(input_list=grad_accumulate[op.id][k], graph=self._graph).output(0)
             else:
               grad_tensor = grad_accumulate[op.id][k][0]
 
@@ -149,10 +152,6 @@ class Operation(object):
   def output(self, index=0):
     output_tensor = self._create_output_tensors()[index]
     return output_tensor
-
-  #def _compute_shapes(self):
-  #  return ["aa"] * self.num_outputs
-
 
   def _get_dependent_tensor(self, op, name, dic, tensor_index):
     tensor = self.output(tensor_index)
