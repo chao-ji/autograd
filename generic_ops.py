@@ -18,16 +18,6 @@ class Const(Operation):
     return [TensorShape(list(self._value.shape))]
 
 
-class Placeholder(Operation):
-  pass
-
-
-class Variable(Operation):
-
-  def __init__(self, initializaer, graph=None, name=None):
-    pass
-
-
 class ZerosLike(Operation, _ShapeAsIs):
   def _run(self, tensor_value):
     outputs = np.zeros_like(tensor_value, dtype="float32")

@@ -85,10 +85,17 @@ class Runtime(object):
   def __init__(self):
     # map: OpName -> list of tensor values
     self._values = collections.defaultdict(list)
+    self._variable_values = dict()
+
 
   def get_tensor_value(self, tensor):
+    tensor.op.run()
+
     tensor_value = self._values[tensor.op.id][tensor.tensor_index]
     return tensor_value
 
+  def get_variable_value(self, variable):
+    variable_value = self._variable_values[variable.id]
+    return variable_value
 
 

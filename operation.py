@@ -3,13 +3,12 @@ import numpy as np
 from collections import defaultdict
 
 from containers import get_default_graph
-from tensor import Tensor
 
 
 class Operation(object):
   """
   """
-  def __init__(self, graph=None, input_list=[], name=None):
+  def __init__(self, graph=None, input_list=[], dependent_ops=[], name=None):
     """Constructor.
 
     Args:
@@ -17,6 +16,8 @@ class Operation(object):
         affiliated. If None, a default graph will be created. Defaults to None.
       input_list (List[Tensor]): (Optional) list of input tensors. Defaults to
         empty list.
+      dependent_ops (List[Operation]): (Optional) list of Ops that should be
+        run prior to this Op. Defaults to empty list.
       name (str): (Optional) name of this Operation. If None, a name will be
         automatically generated. Defaults to None.
     """
@@ -25,6 +26,7 @@ class Operation(object):
     self._graph.add_op(op=self, name=name)
     self._bp_indices = self._get_bp_indices()
     self._outputs = self._create_output_tensors()
+    self._dependent_ops = dependent_ops
 
   def _get_bp_indices(self):
     if not hasattr(self, "_grad_func"):
@@ -41,7 +43,7 @@ class Operation(object):
   def run(self):
     """Compute the value of the tensors coming out of this op."""
     # avoid re-running this op
-    if self.id in self._graph._runtime._values:
+    if not self.mutable and self.id in self._graph._runtime._values:
       return
 
     # prepare the value of the input tensors of this op
@@ -51,13 +53,20 @@ class Operation(object):
       value = self._graph._runtime.get_tensor_value(tensor)
       input_tensor_values.append(value)
 
+    # run dependent ops if any
+    for op in self._dependent_ops:
+      op.run()
+
     # run this op using the actual tensor values from depending ops
     outputs = self._run(*input_tensor_values)
+
+    if self.mutable:
+      self._graph._runtime._values[self.id] = []
 
     # save the output tensor values from this op to the runtime
     if isinstance(outputs, (list, tuple)):
       self._graph._runtime._values[self.id].extend(list(outputs))
-    else:
+    elif outputs is not None:
       self._graph._runtime._values[self.id].append(outputs)
 
     #print(self)
@@ -79,53 +88,71 @@ class Operation(object):
 
     return expected_backprops
 
-  def backprop(self, grad_tensors):
+  def backprop(self, x_tensors, dy_tensors=None):
     """
     Args:
-      grad_tensors (List[Tensor]): list of the same length as the output tensors of this op. 
+      x_tensors (List[Tensor]): list of tensors whose gradients are to be returned. 
+      dy_tensors (List[Tensor]): list of gradient tensors w.r.t. the outputs of
+        this Op. If None, defaults to tensor filled with ones.
+   
+    Returns:
+      dx_tensors (List[Tensor]):  
     """
     from math_ops import AddN 
+    from generic_ops import OnesLike
 
+    if dy_tensors is None:
+      dy_tensors = [OnesLike(input_list=[y_tensor]).output(0) for y_tensor in self._outputs]
+
+    cum_grad = dict()
     expected_backprops = self._compute_expected_backprops()
+    queue = [(self, dy_tensors)]
 
-    grad_accumulate = dict() # {op.id: {tensor_index: [list of received grad tensors]}}
-
-    queue = [(self, grad_tensors)]    # list of (op, list of tensors)
     while len(queue):
-      op, grad_tensors = queue.pop(0)
+      op, dy_tensors = queue.pop(0)
 
+      # Ops without grad functions are treated as constants and hence ignored
       if not hasattr(op, "_grad_func"):
         continue
 
-      la = [op._input_list[bp_index] for bp_index in op._bp_indices]
-      lb = op._grad_func(grad_tensors)
-      assert len(la) == len(lb)
+      for tensor, grad_tensor in zip(
+          # list of input tensors to `op`
+          [op._input_list[bp_index] for bp_index in op._bp_indices],
+          # list of computed gradient tensors w.r.t. input tensors to `op`
+          op._grad_func(dy_tensors)
+        ):
 
-      for tensor, grad_tensor in zip(la, lb):
-
-
-        op, tensor_index = tensor.op, tensor.tensor_index
-
-        if op.id not in grad_accumulate:
-          grad_accumulate[op.id] = defaultdict(list)
-        grad_accumulate[op.id][tensor_index].append(grad_tensor)
+        if tensor.op.id not in cum_grad:
+          cum_grad[tensor.op.id] = defaultdict(list)
+        cum_grad[tensor.op.id][tensor.tensor_index].append(grad_tensor)
 
         if all(
-            len(expected_backprops[op.id][k]) == len(grad_accumulate[op.id][k])
-            for k in expected_backprops[op.id].keys()
+            (
+              len(expected_backprops[tensor.op.id][tensor_index]) ==
+              len(cum_grad[tensor.op.id][tensor_index])
+            )
+            for tensor_index in expected_backprops[tensor.op.id].keys()
           ):
-          grad_tensors = []
-          for k in sorted(grad_accumulate[op.id].keys()):
-            if len(grad_accumulate[op.id][k]) > 1:
-              grad_tensor = AddN(input_list=grad_accumulate[op.id][k], graph=self._graph).output(0)
+
+          dy_tensors = []
+          for tensor_index in sorted(cum_grad[tensor.op.id].keys()):
+            if len(cum_grad[tensor.op.id][tensor_index]) > 1:
+              grad_tensor = AddN(
+                  input_list=cum_grad[tensor.op.id][tensor_index],
+                  graph=self._graph
+              ).output(0)
             else:
-              grad_tensor = grad_accumulate[op.id][k][0]
+              grad_tensor = cum_grad[tensor.op.id][tensor_index][0]
 
-            grad_tensors.append(grad_tensor)
-            grad_accumulate[op.id][k] = [grad_tensor]
-          queue.append((op, grad_tensors))
+            dy_tensors.append(grad_tensor)
+            cum_grad[tensor.op.id][tensor_index] = [grad_tensor]
+          queue.append((tensor.op, dy_tensors))
 
-    return grad_accumulate, expected_backprops
+    dx_tensors = []
+    for x_tensor in x_tensors:
+      dx_tensors.append(cum_grad[x_tensor.op.id][x_tensor.tensor_index][0])
+
+    return dx_tensors
 
   @property
   def name(self):
@@ -143,10 +170,19 @@ class Operation(object):
   def num_outputs(self):
     return 1
 
+  @property
+  def mutable(self):
+    return False
+
   def _create_output_tensors(self):
+    from tensor import Tensor
+
     if not hasattr(self, "_outputs"):
       shapes = self._compute_shapes()
-      self._outputs = [Tensor(self, i, shape) for i, shape in zip(range(self.num_outputs), shapes)]
+      if shapes is None:
+        self._outputs = []
+      else:
+        self._outputs = [Tensor(self, i, shape) for i, shape in zip(range(self.num_outputs), shapes)]
     return self._outputs
 
   def output(self, index=0):

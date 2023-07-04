@@ -1272,3 +1272,37 @@ class ReciprocalGrad(Operation, _PickFirstAmongCompatibleShapes):
 
     return out_grad_tensors
 
+
+class Rsqrt(Operation, _ShapeAsIs):
+  def _run(self, inputs):
+    outputs = 1 / np.sqrt(inputs)
+    return outputs
+
+  def _grad_func(self, in_grad_tensors):
+    with self._graph.as_default_graph():
+      bp_inputs = RsqrtGrad(input_list=[self.output(0), in_grad_tensors[0]])
+      out_grad_tensors = [bp_inputs.output(0)]
+
+    return out_grad_tensors
+
+
+class RsqrtGrad(Operation, _ShapeAsIs):
+
+  def _run(self, outputs, grads):
+    outputs_inputs_grads = grads * -0.5 * outputs**3 
+    return outputs_inputs_grads
+
+  def _grad_func(self, in_grad_tensors):
+    with self._graph.as_default_graph():
+      x = Const(value=np.asarray(-1.5)).output(0)
+      mul = Mul(input_list=[x, in_grad_tensors[0]]).output(0)
+      mul1 = Mul(input_list=[mul, self._input_list[1]]).output(0)
+      square = Square(input_list=[self._input_list[0]]).output(0)
+      bp_outputs = Mul(input_list=[mul1, square])
+      bp_grads = RsqrtGrad(input_list=[self._input_list[0], in_grad_tensors[0]])
+
+      out_grad_tensors = [bp_outputs.output(0), bp_grads.output(0)]
+
+    return out_grad_tensors
+
+

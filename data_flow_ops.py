@@ -376,3 +376,15 @@ class StopGradient(Operation, _ShapeAsIs):
   def _run(self, inputs):
     outputs = inputs
     return outputs
+
+
+class Identity(Operation, _ShapeAsIs):
+  def _run(self, inputs):
+    outputs = inputs
+    return outputs
+
+  def _grad_func(self, in_grad_tensors):
+    out_grad_tensors = in_grad_tensors
+    return out_grad_tensors
+
+
