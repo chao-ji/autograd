@@ -86,7 +86,7 @@ class Runtime(object):
     # map: OpName -> list of tensor values
     self._values = collections.defaultdict(list)
     self._variable_values = dict()
-
+    self._placeholder_values = dict()
 
   def get_tensor_value(self, tensor):
     tensor.op.run()
@@ -94,8 +94,18 @@ class Runtime(object):
     tensor_value = self._values[tensor.op.id][tensor.tensor_index]
     return tensor_value
 
-  def get_variable_value(self, variable):
-    variable_value = self._variable_values[variable.id]
+  def get_variable_value(self, creator_id):
+    variable_value = self._variable_values[creator_id]
     return variable_value
+
+  def set_variable_value(self, creator_id, new_value):
+    self._variable_values[creator_id] = new_value 
+
+  def set_placeholder_value(self, placeholder_id, value):
+    self._placeholder_values[placeholder_id] = value
+
+  def reset(self):
+    self._values = collections.defaultdict(list)
+    self._placeholder_values = dict()
 
 

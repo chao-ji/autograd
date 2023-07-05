@@ -42,7 +42,7 @@ class DynamicStitch(Operation):
       for i, (indices, params) in enumerate(
           zip(self._input_list[:size], in_grad_tensors * size)
         ):
-        bp_data = Gather(input_list=[params, indices, Const(value=np.asarray(0)).output(0)])
+        bp_data = Gather(input_list=[params, indices, Const(value=np.asarray(0, dtype="int32")).output(0)])
         out_grad_tensors.append(bp_data.output(0))
 
     return out_grad_tensors
@@ -94,10 +94,10 @@ class Gather(Operation):
 
     with self._graph.as_default_graph():
 
-      zero_array_tensor = Const(value=np.asarray([0])).output(0)
-      zero_scalar_tensor = Const(value=np.asarray(0)).output(0)
-      one_array_tensor = Const(value=np.asarray([1])).output(0)
-      one_scalar_tensor = Const(value=np.asarray(1)).output(0)
+      zero_array_tensor = Const(value=np.asarray([0], dtype="int32")).output(0)
+      zero_scalar_tensor = Const(value=np.asarray(0, dtype="int32")).output(0)
+      one_array_tensor = Const(value=np.asarray([1], dtype="int32")).output(0)
+      one_scalar_tensor = Const(value=np.asarray(1, dtype="int32")).output(0)
 
       op, tensor_index = (
           self._input_list[0].op,
@@ -181,7 +181,7 @@ class Gather(Operation):
       slice3 = Slice(input_list=[
           shape_tensor,
           Add(input_list=[ed_tensor, one_array_tensor]).output(0),
-          Const(value=np.asarray([-1])).output(0)
+          Const(value=np.asarray([-1], dtype="int32")).output(0)
         ])
 
       concat = Concat(input_list=[
@@ -316,13 +316,13 @@ class Select(Operation):
           input_list=[
               self._input_list[0],
               in_grad_tensors[0],
-              Const(value=np.asarray(0)).output(0)
+              Const(value=np.asarray(0, dtype="float32")).output(0)
           ]
       )
       select1 = Select(
           input_list=[
               self._input_list[0],
-              Const(value=np.asarray(0)).output(0),
+              Const(value=np.asarray(0, dtype="float32")).output(0),
               in_grad_tensors[0]
           ]
       )

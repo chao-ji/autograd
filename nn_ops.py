@@ -1131,7 +1131,7 @@ class SigmoidGrad(Operation, _PickFirstAmongCompatibleShapes):
       mul = Mul(input_list=[in_grad_tensors[0], self._input_list[1]])
       mul1 = Mul(
           input_list=[
-              Const(value=np.asarray(2)).output(0),
+              Const(value=np.asarray(2, dtype="float32")).output(0),
               mul.output(0)
         ]
       )
@@ -1169,7 +1169,7 @@ class TanhGrad(Operation, _PickFirstAmongCompatibleShapes):
     with self._graph.as_default_graph():
       mul = Mul(
           input_list=[
-              Const(value=np.asarray(-2)).output(0),
+              Const(value=np.asarray(-2, dtype="float32")).output(0),
               in_grad_tensors[0]
           ]
       )
@@ -1210,9 +1210,8 @@ class SoftmaxCrossEntropyWithLogits(Operation):
   def _run(self, logits, labels):
     exp_logits = np.exp(logits - np.max(logits))
     softmax = exp_logits / np.sum(exp_logits, axis=-1, keepdims=True) 
-    loss = np.sum(-np.log(softmax) * labels, axis=-1)
-    logits_grads = np.expand_dims(np.ones_like(loss), -1) * (softmax - labels)
-    return loss, logits_grads
+    loss = np.sum(-np.log(softmax) * labels, axis=-1).astype("float32")
+    return loss
 
   def _grad_func(self, in_grad_tensors):
     from array_ops import ExpandDims, Squeeze
@@ -1220,39 +1219,18 @@ class SoftmaxCrossEntropyWithLogits(Operation):
 
     with self._graph.as_default_graph():
       softmax = Softmax(input_list=[self._input_list[0]])
-      log_softmax = LogSoftmax(input_list=[self._input_list[0]]) 
-
+      log_softmax = LogSoftmax(input_list=[self._input_list[0]])
+      sub = Sub(input_list=[softmax.output(0), self._input_list[1]])
       ed = ExpandDims(input_list=[
           in_grad_tensors[0],
-          Const(value=np.asarray(-1)).output(0)
+          Const(value=np.asarray(-1, dtype="int32")).output(0)
         ])
-      ed1 = ExpandDims(input_list=[
-          in_grad_tensors[1],
-          Const(value=np.asarray(1)).output(0)
-        ])
-      ed2 = ExpandDims(input_list=[
-          softmax.output(0),
-          Const(value=np.asarray(2)).output(0)
-        ])
-    
-      mul = Mul(input_list=[self.output(1), ed.output(0)])
       neg = Neg(input_list=[log_softmax.output(0)])
       bp_labels = Mul(input_list=[neg.output(0), ed.output(0)])
+      bp_logits = Mul(input_list=[sub.output(0), ed.output(0)])   
 
-      bmm = BatchMatMul(input_list=[ed1.output(0), ed2.output(0)])
-      squeeze = Squeeze(input_list=[bmm.output(0)], axis=[1])
-      sub = Sub(input_list=[
-          in_grad_tensors[1],
-          squeeze.output(0),
-          ])
-      mul1 = Mul(input_list=[sub.output(0), softmax.output(0)])
-      bp_logits = Add(input_list=[mul1.output(0), mul.output(0)])
       out_grad_tensors = [bp_logits.output(0), bp_labels.output(0)]
     return out_grad_tensors
-
-  @property
-  def num_outputs(self):
-    return 2
 
   def _compute_shapes(self):
     # validation
@@ -1269,7 +1247,7 @@ class SoftmaxCrossEntropyWithLogits(Operation):
     shape = TensorShape([None, None])
     shape._merge(logits_shape)
     shape._merge(labels_shape)
-    return [TensorShape(list(shape.raw_shape[:1])), TensorShape(list(shape.raw_shape))] 
+    return [TensorShape(list(shape.raw_shape[:1]))]
 
 
 class LogSoftmax(Operation, _ShapeAsIs):
@@ -1292,7 +1270,7 @@ class LogSoftmax(Operation, _ShapeAsIs):
           keepdims=True,
           input_list=[
               in_grad_tensors[0],
-              Const(value=np.asarray([-1])).output(0)
+              Const(value=np.asarray([-1], dtype="int32")).output(0)
           ]
       )
       mul = Mul(input_list=[sum0.output(0), exp.output(0)])
@@ -1316,7 +1294,7 @@ class Softmax(Operation, _ShapeAsIs):
           keepdims=True,
           input_list=[
               mul.output(0),
-              Const(value=np.asarray(-1)).output(0)
+              Const(value=np.asarray(-1, dtype="int32")).output(0)
           ]
       )
       sub = Sub(input_list=[in_grad_tensors[0], sum0.output(0)])

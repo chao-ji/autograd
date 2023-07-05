@@ -170,5 +170,3 @@ def _build_vector_from_mixed(mixed):
   vector = Pack(input_list=tensorided, axis=0).output(0)
   return vector
 
-
-

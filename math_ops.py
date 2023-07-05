@@ -505,7 +505,7 @@ class Mean(Operation, _ReductionOp):
   def _run(self, inputs, reduction_indices):
     outputs = np.mean(
         inputs,
-        axis=tuple(reduction_indices.astype("int32").ravel().tolist()),
+        axis=tuple(reduction_indices.ravel().tolist()),
         keepdims=self._keepdims
     )
     return outputs
@@ -525,14 +525,14 @@ class Mean(Operation, _ReductionOp):
       fill = Fill(
           input_list=[
             shape1_tensor,
-            Const(value=np.asarray(1)).output(0)
+            Const(value=np.asarray(1, dtype="int32")).output(0)
           ],
       )
       range0 = Range(
           input_list=[
-              Const(value=np.asarray(0)).output(0),
+              Const(value=np.asarray(0, dtype="int32")).output(0),
               size_tensor,
-              Const(value=np.asarray(1)).output(0)
+              Const(value=np.asarray(1, dtype="int32")).output(0)
           ],
       )
       ds = DynamicStitch(
@@ -544,18 +544,18 @@ class Mean(Operation, _ReductionOp):
       prod1 = Prod(
           input_list=[
               shape3_tensor,
-              Const(value=np.asarray([0])).output(0)
+              Const(value=np.asarray([0], dtype="int32")).output(0)
           ],
       )
       prod = Prod(
           input_list=[
               shape_tensor,
-              Const(value=np.asarray([0])).output(0)
+              Const(value=np.asarray([0], dtype="int32")).output(0)
           ],
       )
       maximum = Maximum(
           input_list=[
-              Const(value=np.asarray(1.)).output(0),
+              Const(value=np.asarray(1, dtype="int32")).output(0),
               prod1.output(0)
           ],
       )
@@ -604,13 +604,13 @@ class Sum(Operation, _ReductionOp):
       fill = Fill(
           input_list=[
               shape1_tensor,
-              Const(value=np.asarray(1)).output(0)
+              Const(value=np.asarray(1, dtype="int32")).output(0)
           ],
       ) 
       range0 = Range(input_list=[
-          Const(value=np.asarray(0)).output(0),
+          Const(value=np.asarray(0, dtype="int32")).output(0),
           size_tensor,
-          Const(value=np.asarray(1)).output(0)]
+          Const(value=np.asarray(1, dtype="int32")).output(0)]
       )    
       ds = DynamicStitch(
           input_list=[range0.output(0), mod.output(0), shape_tensor, fill.output(0)]
@@ -634,9 +634,11 @@ class Prod(Operation, _ReductionOp):
   def _run(self, inputs, reduction_indices):
     outputs = np.prod(
         inputs,
-        axis=tuple(reduction_indices.astype("int32").ravel().tolist()),
+        axis=tuple(reduction_indices.ravel().tolist()),
         keepdims=self._keepdims
     )
+    if inputs.dtype == np.int32:
+      outputs = outputs.astype("int32")
     return outputs
 
   def _grad_func(self, in_grad_tensors):
@@ -653,30 +655,30 @@ class Prod(Operation, _ReductionOp):
     from data_flow_ops import Gather, DynamicStitch, BroadcastTo
 
     with self._graph.as_default_graph():
-      zero_scalar_tensor = Const(value=np.asarray(0)).output(0)
+      zero_scalar_tensor = Const(value=np.asarray(0, dtype="int32")).output(0)
 
       op, tensor_index = self._input_list[0].op, self._input_list[0].tensor_index
       rank_tensor = op.get_rank_tensor(tensor_index=tensor_index)
       reshape = Reshape(input_list=[
           self._input_list[1],
-          Const(value=np.asarray([-1])).output(0)])
+          Const(value=np.asarray([-1], dtype="int32")).output(0)])
       add1 = Add(input_list=[reshape.output(0), rank_tensor])
       shape_tensor = op.get_shape_tensor(tensor_index=tensor_index)
       size_tensor = shape_tensor.op.get_size_tensor(tensor_index=0)
       range1 = Range(input_list=[
-          Const(value=np.asarray(0)).output(0),
+          Const(value=np.asarray(0, dtype="int32")).output(0),
           rank_tensor, 
-          Const(value=np.asarray(1)).output(0)])
+          Const(value=np.asarray(1, dtype="int32")).output(0)])
       mod1 = FloorMod(input_list=[add1.output(0), rank_tensor])
       listdiff = ListDiff(input_list=[range1.output(0), mod1.output(0)])    
       gather = Gather(input_list=[shape_tensor, mod1.output(0), zero_scalar_tensor])
       prod = Prod(input_list=[
           gather.output(0),
-          Const(value=np.asarray([0])).output(0)
+          Const(value=np.asarray([0], dtype="int32")).output(0)
         ])
       gather1 = Gather(input_list=[shape_tensor, listdiff.output(0), zero_scalar_tensor]) 
       concat = Concat(input_list=[
-          Const(value=np.asarray(0)).output(0),
+          Const(value=np.asarray(0, dtype="int32")).output(0),
           mod1.output(0),
           listdiff.output(0),
           ])
@@ -684,14 +686,14 @@ class Prod(Operation, _ReductionOp):
       shape2_tensor = transpose.get_shape_tensor(tensor_index=0)
       prod1 = Prod(input_list=[
           gather1.output(0),
-          Const(value=np.asarray([0])).output(0)
+          Const(value=np.asarray([0], dtype="int32")).output(0)
         ])
       pack = Pack(axis=0, input_list=[prod.output(0), prod1.output(0)])
       reshape2 = Reshape(input_list=[transpose.output(0), pack.output(0)])
       cumprod = Cumprod(exclusive=True, reverse=False,
-          input_list=[reshape2.output(0), Const(value=np.asarray(0)).output(0)])
+          input_list=[reshape2.output(0), Const(value=np.asarray(0, dtype="int32")).output(0)])
       cumprod1 = Cumprod(exclusive=True, reverse=True,
-          input_list=[reshape2.output(0), Const(value=np.asarray(0)).output(0)])
+          input_list=[reshape2.output(0), Const(value=np.asarray(0, dtype="int32")).output(0)])
       mul = Mul(input_list=[cumprod.output(0), cumprod1.output(0)]) 
       reshape3 = Reshape(input_list=[mul.output(0), shape2_tensor])
       invert_perm = InvertPermutation(input_list=[concat.output(0)])
@@ -701,13 +703,13 @@ class Prod(Operation, _ReductionOp):
       add = Add(input_list=[size_tensor, self._input_list[1]])
       mod = FloorMod(input_list=[add.output(0), size_tensor])
       range0 = Range(input_list=[
-        Const(value=np.asarray(0)).output(0),
+        Const(value=np.asarray(0, dtype="int32")).output(0),
         size_tensor,
-        Const(value=np.asarray(1)).output(0)
+        Const(value=np.asarray(1, dtype="int32")).output(0)
         ],
       )
       shape1_tensor = mod.get_shape_tensor(tensor_index=0)
-      fill = Fill(input_list=[shape1_tensor, Const(value=np.asarray(1)).output(0)])
+      fill = Fill(input_list=[shape1_tensor, Const(value=np.asarray(1, dtype="int32")).output(0)])
       ds = DynamicStitch(
           input_list=[range0.output(0), mod.output(0), shape_tensor, fill.output(0)]
       )
@@ -898,17 +900,17 @@ class BatchMatMul(Operation):
       ss = StridedSlice(
           input_list=[
               shape_tensor,
-              Const(value=np.asarray([0])).output(0),
-              Const(value=np.asarray([-2])).output(0),
-              Const(value=np.asarray([1])).output(0),
+              Const(value=np.asarray([0], dtype="int32")).output(0),
+              Const(value=np.asarray([-2], dtype="int32")).output(0),
+              Const(value=np.asarray([1], dtype="int32")).output(0),
           ]
       )
       ss1 = StridedSlice(
           input_list=[
               shape1_tensor,
-              Const(value=np.asarray([0])).output(0),
-              Const(value=np.asarray([-2])).output(0),
-              Const(value=np.asarray([1])).output(0),
+              Const(value=np.asarray([0], dtype="int32")).output(0),
+              Const(value=np.asarray([-2], dtype="int32")).output(0),
+              Const(value=np.asarray([1], dtype="int32")).output(0),
           ]
       )
 
@@ -986,7 +988,7 @@ class SquaredDifference(Operation, _BinaryOp):
       mul = Mul(
           input_list=[
               in_grad_tensors[0],
-              Const(value=np.asarray(2.)).output(0)
+              Const(value=np.asarray(2., dtype="float32")).output(0)
           ]
       )
 
@@ -1026,7 +1028,7 @@ class Square(Operation, _ShapeAsIs):
     with self._graph.as_default_graph():
       mul = Mul(
           input_list=[
-              Const(value=np.asarray(2.)).output(0),
+              Const(value=np.asarray(2., dtype="float32")).output(0),
               self._input_list[0]
           ]
       )
@@ -1213,7 +1215,7 @@ class Log1p(Operation, _ShapeAsIs):
     with self._graph.as_default_graph():
       add = Add(
           input_list=[
-              Const(value=np.asarray(1)).output(0),
+              Const(value=np.asarray(1, dtype="float32")).output(0),
               self._input_list[0],         
           ]
       )
@@ -1261,7 +1263,7 @@ class ReciprocalGrad(Operation, _PickFirstAmongCompatibleShapes):
   def _grad_func(self, in_grad_tensors):
     with self._graph.as_default_graph():
       mul = Mul(
-          input_list=[in_grad_tensors[0], Const(value=np.asarray(-2)).output(0)]
+          input_list=[in_grad_tensors[0], Const(value=np.asarray(-2, dtype="float32")).output(0)]
       ) 
       mul1 = Mul(input_list=[mul.output(0), self._input_list[1]])
       bp_outputs = Mul(input_list=[mul1.output(0), self._input_list[0]])
@@ -1294,7 +1296,7 @@ class RsqrtGrad(Operation, _ShapeAsIs):
 
   def _grad_func(self, in_grad_tensors):
     with self._graph.as_default_graph():
-      x = Const(value=np.asarray(-1.5)).output(0)
+      x = Const(value=np.asarray(-1.5, dtype="float32")).output(0)
       mul = Mul(input_list=[x, in_grad_tensors[0]]).output(0)
       mul1 = Mul(input_list=[mul, self._input_list[1]]).output(0)
       square = Square(input_list=[self._input_list[0]]).output(0)

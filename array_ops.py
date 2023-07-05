@@ -108,7 +108,7 @@ class InvertPermutation(Operation, _ShapeAsIs):
 class Range(Operation):
 
   def _run(self, start, limit, delta):
-    outputs = np.arange(start, limit, delta)
+    outputs = np.arange(start, limit, delta).astype("int32")
     return outputs
 
   def _compute_shapes(self):
@@ -229,13 +229,13 @@ class Tile(Operation):
       transpose = Transpose(
           input_list=[
             pack.output(0),
-            Const(value=np.asarray((1, 0))).output(0)
+            Const(value=np.asarray((1, 0), dtype="int32")).output(0)
           ]
       )
       reshape = Reshape(
           input_list=[
             transpose.output(0),
-            Const(value=np.asarray(-1)).output(0)
+            Const(value=np.asarray(-1, dtype="int32")).output(0)
           ]
       )
       reshape1 = Reshape(
@@ -243,9 +243,9 @@ class Tile(Operation):
       )
       reduction_indices = Range(
           input_list=[
-              Const(value=np.asarray(0)).output(0),
+              Const(value=np.asarray(0, dtype="int32")).output(0),
               reshape.get_size_tensor(tensor_index=0),
-              Const(value=np.asarray(2)).output(0)
+              Const(value=np.asarray(2), dtype="int32").output(0)
           ]
       )
       bp_inputs = Sum(
@@ -490,14 +490,14 @@ class Slice(Operation):
           axis=0,
           input_list=[
               op.get_rank_tensor(tensor_index=tensor_index),
-              Const(value=np.asarray(1)).output(0)
+              Const(value=np.asarray(1, dtype="int32")).output(0)
           ],
       ) 
       reshape = Reshape(input_list=[self._input_list[1], pack.output(0)])
       reshape1 = Reshape(input_list=[sub1.output(0), pack.output(0)])
       concat = Concat(
           input_list=[
-              Const(value=np.asarray(1)).output(0),
+              Const(value=np.asarray(1, dtype="int32")).output(0),
               reshape.output(0), reshape1.output(0)
           ],
       )
@@ -710,21 +710,21 @@ class Pad(Operation):
           axis=0,
           input_list=[
               op.get_rank_tensor(tensor_index=tensor_index),
-              Const(value=np.asarray(1)).output(0)
+              Const(value=np.asarray(1, dtype="int32")).output(0)
           ],
       )
 
       slice0 = Slice(
           input_list=[
               self._input_list[1],
-              Const(value=np.asarray((0, 0))).output(0),
+              Const(value=np.asarray((0, 0), dtype="int32")).output(0),
               pack.output(0)
           ],
       )
       reshape = Reshape(
           input_list=[
               slice0.output(0),
-              Const(value=np.asarray(-1)).output(0)
+              Const(value=np.asarray(-1, dtype="int32")).output(0)
           ],
       ) 
 

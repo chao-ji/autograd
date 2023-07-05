@@ -20,19 +20,19 @@ class Const(Operation):
 
 class ZerosLike(Operation, _ShapeAsIs):
   def _run(self, tensor_value):
-    outputs = np.zeros_like(tensor_value, dtype="float32")
+    outputs = np.zeros_like(tensor_value, dtype=tensor_value.dtype)
     return outputs
 
 
 class OnesLike(Operation, _ShapeAsIs):
   def _run(self, tensor_value):
-    outputs = np.ones_like(tensor_value, dtype="float32")
+    outputs = np.ones_like(tensor_value, dtype=tensor_value.dtype)
     return outputs
 
 
 class Shape(Operation):
   def _run(self, *tensor_values):
-    outputs = [np.asarray(tensor_value.shape) for tensor_value in tensor_values]
+    outputs = [np.asarray(tensor_value.shape, dtype="int32") for tensor_value in tensor_values]
     return outputs
 
   def _compute_shapes(self):
@@ -43,12 +43,12 @@ class Shape(Operation):
 
 class Size(Operation, _ScalarShape):
   def _run(self, tensor_value):
-    outputs = np.size(tensor_value)
+    outputs = np.asarray(np.size(tensor_value), dtype="int32")
     return outputs
 
 
 class Rank(Operation, _ScalarShape):
   def _run(self, tensor_value):
-    outputs = len(tensor_value.shape)
+    outputs = np.asarray(len(tensor_value.shape), dtype="int32")
     return outputs
 
