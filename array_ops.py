@@ -47,6 +47,13 @@ class Reshape(Operation):
         return [TensorShape([None])]
       elif (target_shape >= 0).all():
         return [TensorShape(target_shape)]
+      elif self._input_list[0].shape.level == 2 and -1 in self._input_list[1].op._value:
+        # infer size when target shape contains -1
+        index = self._input_list[1].op._value.tolist().index(-1)
+        new_size = np.prod(self._input_list[0].shape.raw_shape) / np.prod(self._input_list[1].op._value.tolist())
+        raw_shape = list(self._input_list[1].op._value.tolist())
+        raw_shape[index] = -int(new_size)
+        return [TensorShape(raw_shape)]
       else:
         return [TensorShape([None] * self._input_list[1].shape[0])]
     elif self._input_list[1].shape.level == 2:
@@ -332,7 +339,6 @@ class StridedSlice(Operation):
         assert tensor.shape.ndims == 1
         if tensor.shape.level == 2:
           if ndims is not None:
-            print(ndims, tensor.shape[0])
             assert ndims == tensor.shape[0] 
           else:
             ndims = tensor.shape[0]

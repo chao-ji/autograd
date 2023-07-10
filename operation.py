@@ -75,6 +75,14 @@ class Operation(object):
     #print()
 
   def _compute_expected_backprops(self):
+    """Traverse the graph from `self` (Op) in the order of BFS, and count the
+    number of gradient tensors that will be backpropped to each Op.
+
+    Returns:
+      expected_backprops (Dict[int, defaultdict(set)]): dict mapping ID of `op`
+        to a defaultdict, which in turn maps the tensor index to the set of
+        downstream Ops that will backprop gradients to `op`.
+    """
     queue = [self]
     expected_backprops = dict()
     while len(queue):
@@ -151,6 +159,7 @@ class Operation(object):
     dx_tensors = []
     for x_tensor in x_tensors:
       dx_tensors.append(cum_grad[x_tensor.op.id][x_tensor.tensor_index][0])
+    self._graph.cum_grad = cum_grad
 
     return dx_tensors
 

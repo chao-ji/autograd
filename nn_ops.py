@@ -1303,3 +1303,38 @@ class Softmax(Operation, _ShapeAsIs):
     return out_grad_tensors
 
 
+class LeakyRelu(Operation, _ShapeAsIs):
+  def __init__(self, input_list, alpha=0.2, graph=None, name=None):
+    self._alpha = alpha
+    super(LeakyRelu, self).__init__(
+        graph=graph, input_list=input_list, name=name)
+
+  def _run(self, inputs):
+    outputs = np.where(inputs >= 0, inputs, inputs * self._alpha)
+    return outputs
+
+  def _grad_func(self, in_grad_tensors):
+    with self._graph.as_default_graph():
+      bp_inputs = LeakyReluGrad(alpha=self._alpha, input_list=[self._input_list[0], in_grad_tensors[0]])
+      out_grad_tensors = [bp_inputs.output(0)]
+    return out_grad_tensors
+
+
+class LeakyReluGrad(Operation, _PickFirstAmongCompatibleShapes):
+  def __init__(self, input_list, alpha=0.2, graph=None, name=None):
+    self._alpha = alpha
+    super(LeakyReluGrad, self).__init__(
+        graph=graph, input_list=input_list, name=name)
+
+  def _run(self, inputs, grads):
+    outputs_inputs_grads = np.where(inputs <= 0, self._alpha * grads, grads)
+    return outputs_inputs_grads
+
+  def _grad_func(self, in_grad_tensors):
+    from generic_ops import ZerosLike
+
+    with self._graph.as_default_graph():
+      bp_inputs = ZerosLike(input_list=[self._input_list[0]])
+      bp_grads = LeakyReluGrad(input_list=[self._input_list[0], in_grad_tensors[0]], alpha=self._alpha)
+      out_grad_tensors = [bp_inputs.output(0), bp_grads.output(0)]
+    return out_grad_tensors

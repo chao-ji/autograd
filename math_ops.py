@@ -743,21 +743,46 @@ class MatMul(Operation):
     xx = x.T if self._transpose_x else x
     yy = y.T if self._transpose_y else y
     outputs = np.dot(xx, yy)
-    if self._transpose_x:
-      outputs = outputs.T
     return outputs
 
   def _grad_func(self, in_grad_tensors):
     with self._graph.as_default_graph():
-      bp_x = MatMul(
-          input_list=in_grad_tensors+self._input_list[1:],
-          transpose_y=True
-      )
-      bp_y = MatMul(
-          input_list=in_grad_tensors+self._input_list[:1],
-          transpose_x=True
-      )
-
+      if not self._transpose_x and not self._transpose_y:
+        bp_x = MatMul(
+            input_list=in_grad_tensors+self._input_list[1:],
+            transpose_y=True
+        )
+        bp_y = MatMul(
+            input_list=self._input_list[:1]+in_grad_tensors,
+            transpose_x=True
+        )
+      elif self._transpose_x and not self._transpose_y:
+        bp_x = MatMul(
+            input_list=self._input_list[1:]+in_grad_tensors,
+            transpose_y=True
+        )
+        bp_y = MatMul(
+            input_list=self._input_list[:1]+in_grad_tensors,
+        )
+      elif not self._transpose_x and self._transpose_y:
+        bp_x = MatMul(
+            input_list=in_grad_tensors+self._input_list[1:],
+        )
+        bp_y = MatMul(
+            input_list=in_grad_tensors+self._input_list[:1],
+            transpose_x=True
+        )
+      else:
+        bp_x = MatMul(
+            input_list=self._input_list[1:]+in_grad_tensors,
+            transpose_x=True,
+            transpose_y=True,
+        )
+        bp_y = MatMul(
+            input_list=in_grad_tensors+self._input_list[:1],
+            transpose_x=True,
+            transpose_y=True,
+        )
       out_grad_tensors = [bp_x.output(0), bp_y.output(0)]
 
     return out_grad_tensors
@@ -1308,3 +1333,31 @@ class RsqrtGrad(Operation, _ShapeAsIs):
     return out_grad_tensors
 
 
+class Sqrt(Operation, _ShapeAsIs):
+  def _run(self, inputs):
+    outputs = np.sqrt(inputs)
+    return outputs
+
+  def _grad_func(self, in_grad_tensors):
+    with self._graph.as_default_graph():
+      bp_inputs = SqrtGrad(input_list=[self.output(0), in_grad_tensors[0]])
+      out_grad_tensors = [bp_inputs.output(0)]
+
+    return out_grad_tensors
+
+
+class SqrtGrad(Operation, _ShapeAsIs):
+
+  def _run(self, outputs, grads):
+    outputs_inputs_grads = grads * 0.5 / outputs
+    return outputs_inputs_grads
+
+  def _grad_func(self, in_grad_tensors):
+    with self._graph.as_default_graph():
+      div = RealDiv(input_list=[in_grad_tensors[0], self._input_list[0]])
+      neg = Neg(input_list=[div.output(0)])
+      bp_outputs = Mul(input_list=[neg.output(0), self.output(0)])
+      bp_grads = Mul(input_list=[Const(value=np.asarray(0.5)).output(0), div.output(0)])
+      out_grad_tensors = [bp_outputs.output(0), bp_grads.output(0)]
+
+    return out_grad_tensors
