@@ -1,10 +1,9 @@
 
 import collections
-import logging
 import contextlib
+import logging
 
-from .default_stack import _DEFAULT_GRAPH_STACK #, _DEFAULT_NAME_SCOPE_STACK
-
+from .default_stack import _DEFAULT_GRAPH_STACK  # , _DEFAULT_NAME_SCOPE_STACK
 
 
 def get_default_graph():

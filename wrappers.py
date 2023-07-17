@@ -1,14 +1,21 @@
 """Functions that wrap raw operations."""
 import numpy as np
 
-from .generic_ops import Const, ZerosLike, OnesLike, Rank, Size, Shape
-from .array_ops import Reshape, Transpose, Range, Pack, Unpack, Tile, StridedSlice, Slice, Concat, Pad, ExpandDims, Squeeze, Fill
-from .math_ops import Add, Sub, Mul, RealDiv, Neg, Sum, Mean, Prod, FloorDiv, FloorMod, Maximum, Minimum, MatMul, BatchMatMul, Cumsum, Cumprod, GreaterEqual, Greater, LessEqual, Less, Equal, NotEqual, Exp, Log1p, Log, Reciprocal, Rsqrt, SquaredDifference, Square, Sqrt
-from .data_flow_ops import DynamicStitch, Gather, BroadcastTo, Select, StopGradient
-from .nn_ops import Conv2D, Conv2DBackpropInput, MaxPool2D, AvgPool2D, Sigmoid, Tanh, Relu, SoftmaxCrossEntropyWithLogits, LogSoftmax, Softmax
-from .random_ops import RandomUniform, RandomStandardNormal
+from .array_ops import (Concat, ExpandDims, Fill, Pack, Pad, Range, Reshape,
+                        Slice, Squeeze, StridedSlice, Tile, Transpose, Unpack)
+from .data_flow_ops import (BroadcastTo, DynamicStitch, Gather, Select,
+                            StopGradient)
+from .generic_ops import Const, OnesLike, Rank, Shape, Size, ZerosLike
+from .math_ops import (Add, BatchMatMul, Cumprod, Cumsum, Equal, Exp, FloorDiv,
+                       FloorMod, Greater, GreaterEqual, Less, LessEqual, Log,
+                       Log1p, MatMul, Maximum, Mean, Minimum, Mul, Neg,
+                       NotEqual, Prod, RealDiv, Reciprocal, Rsqrt, Sqrt,
+                       Square, SquaredDifference, Sub, Sum)
+from .nn_ops import (AvgPool2D, Conv2D, Conv2DBackpropInput, LogSoftmax,
+                     MaxPool2D, Relu, Sigmoid, Softmax,
+                     SoftmaxCrossEntropyWithLogits, Tanh)
+from .random_ops import RandomStandardNormal, RandomUniform
 from .resource_ops import Placeholder
-
 
 _FLOAT_TYPES = np.float16, np.float32, np.float64, np.float128, np.float_, float
 _INT_TYPES = np.int0, np.int8, np.int16, np.int32, np.int64, np.int_, int,

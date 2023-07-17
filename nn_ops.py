@@ -1,11 +1,10 @@
 """Neural network related Operations."""
 import numpy as np
 
-from .operation import Operation
 from .generic_ops import Const
-
+from .mixins import _PickFirstAmongCompatibleShapes, _ShapeAsIs
+from .operation import Operation
 from .tensor_shape import TensorShape
-from .mixins import _ShapeAsIs, _PickFirstAmongCompatibleShapes
 
 
 class _Filters2DBase(Operation):
@@ -1215,7 +1214,7 @@ class SoftmaxCrossEntropyWithLogits(Operation):
 
   def _grad_func(self, in_grad_tensors):
     from .array_ops import ExpandDims, Squeeze
-    from .math_ops import BatchMatMul, Mul, Sub, Neg, Add
+    from .math_ops import Add, BatchMatMul, Mul, Neg, Sub
 
     with self._graph.as_default_graph():
       softmax = Softmax(input_list=[self._input_list[0]])
@@ -1262,7 +1261,7 @@ class LogSoftmax(Operation, _ShapeAsIs):
     return outputs
 
   def _grad_func(self, in_grad_tensors):
-    from .math_ops import Exp, Sum, Mul, Sub
+    from .math_ops import Exp, Mul, Sub, Sum
 
     with self._graph.as_default_graph():
       exp = Exp(input_list=[self.output(0)])
@@ -1286,7 +1285,7 @@ class Softmax(Operation, _ShapeAsIs):
     return softmax
 
   def _grad_func(self, in_grad_tensors):
-    from .math_ops import Sum, Mul, Sub
+    from .math_ops import Mul, Sub, Sum
 
     with self._graph.as_default_graph():
       mul = Mul(input_list=[in_grad_tensors[0], self.output(0)])

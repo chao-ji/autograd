@@ -1,10 +1,11 @@
 """Math related Operations."""
 import numpy as np
 
-from .operation import Operation
 from .generic_ops import Const
+from .mixins import (_BinaryOp, _PickFirstAmongCompatibleShapes, _ReductionOp,
+                     _ShapeAsIs)
+from .operation import Operation
 from .tensor_shape import TensorShape
-from .mixins import _BinaryOp, _ReductionOp, _ShapeAsIs, _PickFirstAmongCompatibleShapes
 
 
 class BroadcastGradientArgs(Operation):
@@ -512,7 +513,7 @@ class Mean(Operation, _ReductionOp):
 
   def _grad_func(self, in_grad_tensors):
     from .array_ops import Fill, Range, Reshape
-    from .data_flow_ops import DynamicStitch, BroadcastTo
+    from .data_flow_ops import BroadcastTo, DynamicStitch
 
     with self._graph.as_default_graph():
       op, tensor_index = self._input_list[0].op, self._input_list[0].tensor_index
@@ -589,7 +590,7 @@ class Sum(Operation, _ReductionOp):
 
   def _grad_func(self, in_grad_tensors):
     from .array_ops import Fill, Range, Reshape
-    from .data_flow_ops import DynamicStitch, BroadcastTo
+    from .data_flow_ops import BroadcastTo, DynamicStitch
 
     with self._graph.as_default_graph():
       op, tensor_index = self._input_list[0].op, self._input_list[0].tensor_index
@@ -642,17 +643,9 @@ class Prod(Operation, _ReductionOp):
     return outputs
 
   def _grad_func(self, in_grad_tensors):
-    from .array_ops import (
-        Reshape,
-        Range,
-        ListDiff,
-        Concat,
-        Transpose,
-        Pack,
-        InvertPermutation,
-        Fill
-    )
-    from .data_flow_ops import Gather, DynamicStitch, BroadcastTo
+    from .array_ops import (Concat, Fill, InvertPermutation, ListDiff, Pack,
+                            Range, Reshape, Transpose)
+    from .data_flow_ops import BroadcastTo, DynamicStitch, Gather
 
     with self._graph.as_default_graph():
       zero_scalar_tensor = Const(value=np.asarray(0, dtype="int32")).output(0)
@@ -865,7 +858,7 @@ class BatchMatMul(Operation):
     return outputs
 
   def _grad_func(self, in_grad_tensors):
-    from .array_ops import StridedSlice, Reshape
+    from .array_ops import Reshape, StridedSlice
 
     with self._graph.as_default_graph():
       if not self._transpose_x and not self._transpose_y:

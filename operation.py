@@ -1,6 +1,7 @@
 """Defines base class `Operation` for all Ops and some generic Op types."""
-import numpy as np
 from collections import defaultdict
+
+import numpy as np
 
 from .containers import get_default_graph
 
@@ -106,8 +107,8 @@ class Operation(object):
     Returns:
       dx_tensors (List[Tensor]):
     """
-    from .math_ops import AddN
     from .generic_ops import OnesLike
+    from .math_ops import AddN
 
     if dy_tensors is None:
       dy_tensors = [OnesLike(input_list=[y_tensor]).output(0) for y_tensor in self._outputs]

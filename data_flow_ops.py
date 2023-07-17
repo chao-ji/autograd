@@ -1,10 +1,9 @@
 """Data flow related Operations."""
 import numpy as np
 
-from .operation import Operation
 from .generic_ops import Const
-
 from .mixins import _ShapeAsIs
+from .operation import Operation
 from .tensor_shape import TensorShape
 
 
@@ -89,8 +88,8 @@ class Gather(Operation):
     return outputs
 
   def _grad_func(self, in_grad_tensors):
-    from .array_ops import Slice, Concat, Fill, ExpandDims, Range, Transpose
-    from .math_ops import Sub, Add, FloorMod
+    from .array_ops import Concat, ExpandDims, Fill, Range, Slice, Transpose
+    from .math_ops import Add, FloorMod, Sub
 
     with self._graph.as_default_graph():
 
@@ -246,8 +245,8 @@ class BroadcastTo(Operation):
     return outputs
 
   def _grad_func(self, in_grad_tensors):
-    from .math_ops import BroadcastGradientArgs, Sum
     from .array_ops import Reshape
+    from .math_ops import BroadcastGradientArgs, Sum
 
     with self._graph.as_default_graph():
       op, tensor_index = self._input_list[0].op, self._input_list[0].tensor_index
@@ -299,8 +298,8 @@ class Select(Operation):
     return outputs
 
   def _grad_func(self, in_grad_tensors):
-    from .math_ops import Sum, BroadcastGradientArgs
     from .array_ops import Reshape
+    from .math_ops import BroadcastGradientArgs, Sum
 
     with self._graph.as_default_graph():
 

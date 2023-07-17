@@ -1,11 +1,10 @@
+from collections import namedtuple
+
 import numpy as np
 
+from .mixins import _ScalarShape
 from .operation import Operation
 from .tensor_shape import TensorShape
-
-from .mixins import _ScalarShape
-
-from collections import namedtuple
 
 
 class VariableSpec(object):
@@ -93,7 +92,6 @@ class ReadVariable(Operation):
 
   def _run(self, variable_spec):
     variable_spec = variable_spec.item()
-    #outputs = self._graph._runtime._variable_values[variable_spec.id]
     outputs = self._graph._runtime.get_variable_value(variable_spec.id)
     return outputs
 

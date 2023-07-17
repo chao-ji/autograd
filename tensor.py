@@ -95,8 +95,8 @@ class Tensor(object):
     return Neg(input_list=[self]).output(0)
 
   def __getitem__(self, slice_specs):
-    from .generic_ops import Const
     from .array_ops import Reshape, StridedSlice, Unpack
+    from .generic_ops import Const
 
     ndims = None
     orig_shape = None
@@ -192,8 +192,8 @@ class Tensor(object):
 
 
 def _build_vector_from_mixed(mixed):
-  from .generic_ops import Const
   from .array_ops import Pack
+  from .generic_ops import Const
 
   if not any([isinstance(i, Tensor) for i in mixed]):
     vector = Const(value=np.asarray(mixed)).output(0)

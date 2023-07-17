@@ -1,7 +1,7 @@
 import numpy as np
 
-from .operation import Operation
 from .mixins import _ShapeAsIs, _TensorShapeAsInput
+from .operation import Operation
 from .tensor_shape import TensorShape
 
 

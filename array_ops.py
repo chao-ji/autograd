@@ -1,12 +1,11 @@
 """Operations on multi-dimensional arrays."""
 import numpy as np
 
-from .operation import Operation
-
 from .generic_ops import Const
-from .math_ops import Sum, Mean
-from .tensor_shape import TensorShape
+from .math_ops import Mean, Sum
 from .mixins import _ShapeAsIs, _TensorShapeAsInput
+from .operation import Operation
+from .tensor_shape import TensorShape
 
 
 class Reshape(Operation):

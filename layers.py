@@ -1,11 +1,15 @@
-from .resource_ops import CreateVariable, ReadVariable, AddToVariable
-from .math_ops import  Add
-from .nn_ops import Relu, Tanh, Sigmoid, LeakyRelu
-from .generic_ops import Const
-import numpy as np
 from collections import namedtuple
 
-from .initializers import TruncatedNormalInitializer, RandomUniformInitializer, ZerosInitializer, OnesInitializer, GlorotUniformInitializer, GlorotNormalInitializer, HeUniformInitializer, HeNormalInitializer
+import numpy as np
+
+from .generic_ops import Const
+from .initializers import (GlorotNormalInitializer, GlorotUniformInitializer,
+                           HeNormalInitializer, HeUniformInitializer,
+                           OnesInitializer, RandomUniformInitializer,
+                           TruncatedNormalInitializer, ZerosInitializer)
+from .math_ops import Add
+from .nn_ops import LeakyRelu, Relu, Sigmoid, Tanh
+from .resource_ops import AddToVariable, CreateVariable, ReadVariable
 
 ACTIVATIONS = {
     "relu": Relu,
@@ -278,7 +282,7 @@ class BatchNormalization(Layer):
       self._build(shape_list, init_fn_list, flag_list, trainable_list)
 
   def __call__(self, inputs, training=False):
-    from .math_ops import Rsqrt, Mul, Sub
+    from .math_ops import Mul, Rsqrt, Sub
 
     self.build(inputs.shape.raw_shape)
     reduction_indices = [i for i in range(inputs.shape.ndims)
@@ -288,7 +292,7 @@ class BatchNormalization(Layer):
     gamma = self._variables[1].weight
 
     if training:
-      from .math_ops import Mul, Mean, SquaredDifference
+      from .math_ops import Mean, Mul, SquaredDifference
 
       # compute batch mean and variance and use them for normalization
       axis = Const(value=np.asarray(reduction_indices, dtype="int32")).output(0)

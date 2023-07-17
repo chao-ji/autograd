@@ -1,8 +1,8 @@
-from .operation import Operation
-from .tensor_shape import TensorShape
 import numpy as np
 
-from .mixins import _ShapeAsIs, _ScalarShape
+from .mixins import _ScalarShape, _ShapeAsIs
+from .operation import Operation
+from .tensor_shape import TensorShape
 
 
 class Const(Operation):
