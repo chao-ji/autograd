@@ -1,10 +1,10 @@
 """Math related Operations."""
 import numpy as np
 
-from operation import Operation
-from generic_ops import Const
-from tensor_shape import TensorShape
-from mixins import _BinaryOp, _ReductionOp, _ShapeAsIs, _PickFirstAmongCompatibleShapes
+from .operation import Operation
+from .generic_ops import Const
+from .tensor_shape import TensorShape
+from .mixins import _BinaryOp, _ReductionOp, _ShapeAsIs, _PickFirstAmongCompatibleShapes
 
 
 class BroadcastGradientArgs(Operation):
@@ -36,7 +36,7 @@ class BroadcastGradientArgs(Operation):
       assert self._input_list[1].shape.ndims == 1
 
     # compute shapes
-    return [TensorShape([None]), TensorShape([None])] 
+    return [TensorShape([None]), TensorShape([None])]
 
 
 class Add(Operation, _BinaryOp):
@@ -47,7 +47,7 @@ class Add(Operation, _BinaryOp):
     return outputs
 
   def _grad_func(self, in_grad_tensors):
-    from array_ops import Reshape
+    from .array_ops import Reshape
 
     with self._graph.as_default_graph():
       op_x = self._input_list[0].op
@@ -105,7 +105,7 @@ class Sub(Operation, _BinaryOp):
     return outputs
 
   def _grad_func(self, in_grad_tensors):
-    from array_ops import Reshape
+    from .array_ops import Reshape
 
     with self._graph.as_default_graph():
       op_x = self._input_list[0].op
@@ -152,7 +152,7 @@ class Mul(Operation, _BinaryOp):
     return outputs
 
   def _grad_func(self, in_grad_tensors):
-    from array_ops import Reshape
+    from .array_ops import Reshape
 
     with self._graph.as_default_graph():
       op_x = self._input_list[0].op
@@ -201,7 +201,7 @@ class RealDiv(Operation, _BinaryOp):
     return outputs
 
   def _grad_func(self, in_grad_tensors):
-    from array_ops import Reshape
+    from .array_ops import Reshape
 
     with self._graph.as_default_graph():
       neg = Neg(
@@ -266,7 +266,7 @@ class FloorMod(Operation, _BinaryOp):
     return outputs
 
   def _grad_func(self, in_grad_tensors):
-    from array_ops import Reshape
+    from .array_ops import Reshape
 
     with self._graph.as_default_graph():
       div = FloorDiv(input_list=self._input_list)
@@ -314,8 +314,8 @@ class Maximum(Operation, _BinaryOp):
     return outputs
 
   def _grad_func(self, in_grad_tensors):
-    from array_ops import Reshape
-    from data_flow_ops import Select
+    from .array_ops import Reshape
+    from .data_flow_ops import Select
 
     with self._graph.as_default_graph():
       op_x = self._input_list[0].op
@@ -369,8 +369,8 @@ class Minimum(Operation, _BinaryOp):
     return outputs
 
   def _grad_func(self, in_grad_tensors):
-    from array_ops import Reshape
-    from data_flow_ops import Select
+    from .array_ops import Reshape
+    from .data_flow_ops import Select
 
     with self._graph.as_default_graph():
       op_x = self._input_list[0].op
@@ -425,7 +425,7 @@ class DivNoNan(Operation, _BinaryOp):
     return outputs
 
   def _grad_func(self, in_grad_tensors):
-    from array_ops import Reshape
+    from .array_ops import Reshape
 
     with self._graph.as_default_graph():
       div = DivNoNan(
@@ -511,8 +511,8 @@ class Mean(Operation, _ReductionOp):
     return outputs
 
   def _grad_func(self, in_grad_tensors):
-    from array_ops import Fill, Range, Reshape
-    from data_flow_ops import DynamicStitch, BroadcastTo
+    from .array_ops import Fill, Range, Reshape
+    from .data_flow_ops import DynamicStitch, BroadcastTo
 
     with self._graph.as_default_graph():
       op, tensor_index = self._input_list[0].op, self._input_list[0].tensor_index
@@ -539,7 +539,7 @@ class Mean(Operation, _ReductionOp):
           input_list=[
               range0.output(0), mod.output(0), shape_tensor, fill.output(0)
           ],
-      ) 
+      )
       shape3_tensor = self.get_shape_tensor(tensor_index=0)
       prod1 = Prod(
           input_list=[
@@ -588,8 +588,8 @@ class Sum(Operation, _ReductionOp):
     return outputs
 
   def _grad_func(self, in_grad_tensors):
-    from array_ops import Fill, Range, Reshape
-    from data_flow_ops import DynamicStitch, BroadcastTo
+    from .array_ops import Fill, Range, Reshape
+    from .data_flow_ops import DynamicStitch, BroadcastTo
 
     with self._graph.as_default_graph():
       op, tensor_index = self._input_list[0].op, self._input_list[0].tensor_index
@@ -606,12 +606,12 @@ class Sum(Operation, _ReductionOp):
               shape1_tensor,
               Const(value=np.asarray(1, dtype="int32")).output(0)
           ],
-      ) 
+      )
       range0 = Range(input_list=[
           Const(value=np.asarray(0, dtype="int32")).output(0),
           size_tensor,
           Const(value=np.asarray(1, dtype="int32")).output(0)]
-      )    
+      )
       ds = DynamicStitch(
           input_list=[range0.output(0), mod.output(0), shape_tensor, fill.output(0)]
       )
@@ -642,7 +642,7 @@ class Prod(Operation, _ReductionOp):
     return outputs
 
   def _grad_func(self, in_grad_tensors):
-    from array_ops import (
+    from .array_ops import (
         Reshape,
         Range,
         ListDiff,
@@ -652,7 +652,7 @@ class Prod(Operation, _ReductionOp):
         InvertPermutation,
         Fill
     )
-    from data_flow_ops import Gather, DynamicStitch, BroadcastTo
+    from .data_flow_ops import Gather, DynamicStitch, BroadcastTo
 
     with self._graph.as_default_graph():
       zero_scalar_tensor = Const(value=np.asarray(0, dtype="int32")).output(0)
@@ -667,16 +667,16 @@ class Prod(Operation, _ReductionOp):
       size_tensor = shape_tensor.op.get_size_tensor(tensor_index=0)
       range1 = Range(input_list=[
           Const(value=np.asarray(0, dtype="int32")).output(0),
-          rank_tensor, 
+          rank_tensor,
           Const(value=np.asarray(1, dtype="int32")).output(0)])
       mod1 = FloorMod(input_list=[add1.output(0), rank_tensor])
-      listdiff = ListDiff(input_list=[range1.output(0), mod1.output(0)])    
+      listdiff = ListDiff(input_list=[range1.output(0), mod1.output(0)])
       gather = Gather(input_list=[shape_tensor, mod1.output(0), zero_scalar_tensor])
       prod = Prod(input_list=[
           gather.output(0),
           Const(value=np.asarray([0], dtype="int32")).output(0)
         ])
-      gather1 = Gather(input_list=[shape_tensor, listdiff.output(0), zero_scalar_tensor]) 
+      gather1 = Gather(input_list=[shape_tensor, listdiff.output(0), zero_scalar_tensor])
       concat = Concat(input_list=[
           Const(value=np.asarray(0, dtype="int32")).output(0),
           mod1.output(0),
@@ -694,7 +694,7 @@ class Prod(Operation, _ReductionOp):
           input_list=[reshape2.output(0), Const(value=np.asarray(0, dtype="int32")).output(0)])
       cumprod1 = Cumprod(exclusive=True, reverse=True,
           input_list=[reshape2.output(0), Const(value=np.asarray(0, dtype="int32")).output(0)])
-      mul = Mul(input_list=[cumprod.output(0), cumprod1.output(0)]) 
+      mul = Mul(input_list=[cumprod.output(0), cumprod1.output(0)])
       reshape3 = Reshape(input_list=[mul.output(0), shape2_tensor])
       invert_perm = InvertPermutation(input_list=[concat.output(0)])
       transpose1 = Transpose(
@@ -865,7 +865,7 @@ class BatchMatMul(Operation):
     return outputs
 
   def _grad_func(self, in_grad_tensors):
-    from array_ops import StridedSlice, Reshape
+    from .array_ops import StridedSlice, Reshape
 
     with self._graph.as_default_graph():
       if not self._transpose_x and not self._transpose_y:
@@ -941,7 +941,7 @@ class BatchMatMul(Operation):
 
       bga = BroadcastGradientArgs(
           input_list=[ss.output(0), ss1.output(0)]
-      ) 
+      )
 
       sum0 = Sum(input_list=[bmm.output(0), bga.output(0)])
       sum1 = Sum(input_list=[bmm1.output(0), bga.output(1)])
@@ -958,7 +958,7 @@ class BatchMatMul(Operation):
       return [TensorShape(None)]
 
     x_shape = self._input_list[0].shape.raw_shape
-    y_shape = self._input_list[1].shape.raw_shape 
+    y_shape = self._input_list[1].shape.raw_shape
 
     assert len(x_shape) >= 2 and len(y_shape) >= 2
 
@@ -982,11 +982,11 @@ class BatchMatMul(Operation):
     if len(x_shape) < len(y_shape):
       shape = list(y_shape[:-2-len(shape)]) + shape[::-1]
     else:
-      shape = list(x_shape[:-2-len(shape)]) + shape[::-1] 
+      shape = list(x_shape[:-2-len(shape)]) + shape[::-1]
 
     x_slice_shape = x_shape[-2:][::-1] if self._transpose_x else x_shape[-2:]
     y_slice_shape = y_shape[-2:][::-1] if self._transpose_y else y_shape[-2:]
-    
+
     assert x_slice_shape[1] is None or y_slice_shape[0] is None or x_slice_shape[1] == y_slice_shape[0]
 
     shape = shape + [x_slice_shape[0], y_slice_shape[1]]
@@ -996,10 +996,10 @@ class BatchMatMul(Operation):
 class SquaredDifference(Operation, _BinaryOp):
   def _run(self, x, y):
     outputs = np.square(x - y)
-    return outputs 
+    return outputs
 
   def _grad_func(self, in_grad_tensors):
-    from array_ops import Reshape
+    from .array_ops import Reshape
 
     with self._graph.as_default_graph():
       op_x = self._input_list[0].op
@@ -1009,7 +1009,7 @@ class SquaredDifference(Operation, _BinaryOp):
 
       shape_tensor = op_x.get_shape_tensor(tensor_index=tensor_index_x)
       shape1_tensor = op_y.get_shape_tensor(tensor_index=tensor_index_y)
-      
+
       mul = Mul(
           input_list=[
               in_grad_tensors[0],
@@ -1058,7 +1058,7 @@ class Square(Operation, _ShapeAsIs):
           ]
       )
       mul1 = Mul(input_list=[mul.output(0), in_grad_tensors[0]])
-      out_grad_tensors = [mul1.output(0)]   
+      out_grad_tensors = [mul1.output(0)]
 
     return out_grad_tensors
 
@@ -1241,11 +1241,11 @@ class Log1p(Operation, _ShapeAsIs):
       add = Add(
           input_list=[
               Const(value=np.asarray(1, dtype="float32")).output(0),
-              self._input_list[0],         
+              self._input_list[0],
           ]
       )
       reciprocal = Reciprocal(input_list=[add.output(0)])
-      bp_inputs = Mul(input_list=[reciprocal.output(0), in_grad_tensors[0]]) 
+      bp_inputs = Mul(input_list=[reciprocal.output(0), in_grad_tensors[0]])
       out_grad_tensors = [bp_inputs.output(0)]
 
     return out_grad_tensors
@@ -1289,7 +1289,7 @@ class ReciprocalGrad(Operation, _PickFirstAmongCompatibleShapes):
     with self._graph.as_default_graph():
       mul = Mul(
           input_list=[in_grad_tensors[0], Const(value=np.asarray(-2, dtype="float32")).output(0)]
-      ) 
+      )
       mul1 = Mul(input_list=[mul.output(0), self._input_list[1]])
       bp_outputs = Mul(input_list=[mul1.output(0), self._input_list[0]])
       bp_grads = ReciprocalGrad(
@@ -1316,7 +1316,7 @@ class Rsqrt(Operation, _ShapeAsIs):
 class RsqrtGrad(Operation, _ShapeAsIs):
 
   def _run(self, outputs, grads):
-    outputs_inputs_grads = grads * -0.5 * outputs**3 
+    outputs_inputs_grads = grads * -0.5 * outputs**3
     return outputs_inputs_grads
 
   def _grad_func(self, in_grad_tensors):

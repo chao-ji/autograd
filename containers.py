@@ -1,9 +1,9 @@
 
 import collections
-import logging 
+import logging
 import contextlib
 
-from default_stack import _DEFAULT_GRAPH_STACK #, _DEFAULT_NAME_SCOPE_STACK
+from .default_stack import _DEFAULT_GRAPH_STACK #, _DEFAULT_NAME_SCOPE_STACK
 
 
 
@@ -25,9 +25,9 @@ def _pop_graph():
 class Graph(object):
 
   def __init__(self):
-    self._runtime = None
+    self._runtime = Runtime()
 
-    # dictionary that maps op ID (int) to Op 
+    # dictionary that maps op ID (int) to Op
     self._ops = dict()
     # dictionary that maps type name of Operation to its count
     self._op_type_count = collections.defaultdict(int)
@@ -43,6 +43,9 @@ class Graph(object):
 
     self._rank_tensors = dict()
 
+  @property
+  def runtime(self):
+    return self._runtime
 
   def get_op(self, id_):
     return self._ops[id_]
@@ -99,7 +102,7 @@ class Runtime(object):
     return variable_value
 
   def set_variable_value(self, creator_id, new_value):
-    self._variable_values[creator_id] = new_value 
+    self._variable_values[creator_id] = new_value
 
   def set_placeholder_value(self, placeholder_id, value):
     self._placeholder_values[placeholder_id] = value
@@ -107,5 +110,3 @@ class Runtime(object):
   def reset(self):
     self._values = collections.defaultdict(list)
     self._placeholder_values = dict()
-
-

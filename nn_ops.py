@@ -1,11 +1,11 @@
 """Neural network related Operations."""
 import numpy as np
 
-from operation import Operation
-from generic_ops import Const
+from .operation import Operation
+from .generic_ops import Const
 
-from tensor_shape import TensorShape
-from mixins import _ShapeAsIs, _PickFirstAmongCompatibleShapes
+from .tensor_shape import TensorShape
+from .mixins import _ShapeAsIs, _PickFirstAmongCompatibleShapes
 
 
 class _Filters2DBase(Operation):
@@ -85,7 +85,7 @@ class _Filters2DBase(Operation):
     3,0  3,1  3,2  3,3
 
     and a 2-by-2 filter with strides [2, 2], the output is like this:
-    
+
     [(h, w, h_index w_index)] =
       [(0,  0,  0,  0),
        (0,  2,  0,  1),
@@ -153,7 +153,7 @@ class _Filters2DBase(Operation):
         "pad_top" and "pad_bottom") and width dimension ("pad_left" and
         "pad_right").
       filters_size (tuple): filters size in height and width dimension.
-  
+
     Returns:
       inputs_mat (tensor): 2D tensor of shape [out_height * out_width *
         batch_size, in_channels * filters_height * filters_ width], the inputs
@@ -502,9 +502,9 @@ class Conv2DBackpropInput(_Filters2DBase):
       assert filters_shape[3] == grads_shape[3]
 
     if hasattr(inputs_shape.op, "_value"):
-      if filters_shape.level > 0 and filters_shape[2] is not None: 
+      if filters_shape.level > 0 and filters_shape[2] is not None:
         assert filters_shape[2] == inputs_shape.op._value[3]
-      if grads_shape.level > 0 and grads_shape[0] is not None: 
+      if grads_shape.level > 0 and grads_shape[0] is not None:
         assert grads_shape[0] == inputs_shape.op._value[0]
 
     # compute shapes
@@ -517,7 +517,7 @@ class Conv2DBackpropInput(_Filters2DBase):
       batch_size = grads_shape[0]
 
     if filters_shape.level > 0 and filters_shape[2] is not None and in_channels is None:
-      in_channels = filters_shape[2]     
+      in_channels = filters_shape[2]
     return [TensorShape([batch_size, height, width, in_channels])]
 
 
@@ -562,7 +562,7 @@ class Conv2DBackpropFilter(_Filters2DBase):
 
   def _grad_func(self, in_grad_tensors):
     with self._graph.as_default_graph():
-      op, tensor_index = self._input_list[0].op, self._input_list[0].tensor_index 
+      op, tensor_index = self._input_list[0].op, self._input_list[0].tensor_index
       bp_inputs = Conv2DBackpropInput(
           strides=self._strides,
           padding=self._padding,
@@ -613,7 +613,7 @@ class Conv2DBackpropFilter(_Filters2DBase):
       filters_height, filters_width, in_channels, out_channels = filters_shape.op._value
 
     if inputs_shape.level > 0 and inputs_shape[3] is not None and in_channels is None:
-      in_channels = inputs_shape[3] 
+      in_channels = inputs_shape[3]
     if grads_shape.level > 0 and grads_shape[3] is not None and out_channels is None:
       out_channels = grads_shape[3]
 
@@ -795,17 +795,17 @@ class MaxPool2DGrad(_Pooling2DBase):
     if grads_shape.level > 0:
       assert grads_shape.ndims == 4
 
-    if (inputs_shape.level > 0 and grads_shape.level > 0 and 
+    if (inputs_shape.level > 0 and grads_shape.level > 0 and
         inputs_shape[0] is not None and grads_shape[0] is not None and
         inputs_shape[3] is not None and grads_shape[3] is not None):
       assert inputs_shape[0] == grads_shape[0]
       assert inputs_shape[3] == grads_shape[3]
- 
+
     # compute shapes
     batch_size, height, width, num_channels = None, None, None, None
     if inputs_shape.level > 0:
       if inputs_shape[0] is not None:
-        batch_size = inputs_shape[0] 
+        batch_size = inputs_shape[0]
       if inputs_shape[1] is not None:
         height = inputs_shape[1]
       if inputs_shape[2] is not None:
@@ -832,7 +832,7 @@ class MaxPool2DGradGrad(_Pooling2DBase):
 
     Args:
       inputs (tensor): 4D tensor of shape [batch_size, height, width,
-        in_channels], the inputs tensor to be max-pooled. 
+        in_channels], the inputs tensor to be max-pooled.
       inputs_grads_grads (tensor): 4D tensor of shape [batch_size, height, width
         , in_channels], gradients w.r.t. the outputs of `MaxPool2DGrad`.
 
@@ -862,7 +862,7 @@ class MaxPool2DGradGrad(_Pooling2DBase):
     #[out_height*out_width*batch_size*in_channels]
     argmax = np.nanargmax(inputs_mat, axis=1)
 
-    #[out_height*out_width*batch_size*in_channels] 
+    #[out_height*out_width*batch_size*in_channels]
     grads_grads_mat = inputs_grads_grads_mat[
         np.arange(inputs_grads_grads_mat.shape[0]), argmax]
 
@@ -896,7 +896,7 @@ class MaxPool2DGradGrad(_Pooling2DBase):
 
   def _compute_shapes(self):
     # validation
-    inputs_shape = self._input_list[0].shape 
+    inputs_shape = self._input_list[0].shape
     inputs_grads_grads_shape = self._input_list[1].shape
 
     if inputs_shape.level > 0:
@@ -918,7 +918,7 @@ class MaxPool2DGradGrad(_Pooling2DBase):
           width = self._compute_spatial_size(
               shape[2], self._filters_size[1], self._strides[1], self._padding)
     return [TensorShape([batch_size, height, width, num_channels])]
- 
+
 
 class AvgPool2D(_Pooling2DBase):
   """Regular 2D average pooling."""
@@ -978,7 +978,7 @@ class AvgPool2DGrad(_Pooling2DBase):
       grads (tensor): 4D tensor of shape [batch_size, out_height, out_width,
         in_channels], gradients w.r.t. the outputs tensor.
       inputs_shape (tensor): 4-tuple storing shape of the inputs tensor as [
-        batch_size, height, width, in_channels]. 
+        batch_size, height, width, in_channels].
 
     Returns:
       inputs_grads (tensor): 4D tensor of shape [batch_size, height, width,
@@ -1080,8 +1080,8 @@ class AvgPool2DGrad(_Pooling2DBase):
       assert inputs_shape.shape.ndims == 1
 
     if (grads_shape.level > 0 and
-        hasattr(inputs_shape.op, "_value") and 
-        grads_shape[0] is not None and 
+        hasattr(inputs_shape.op, "_value") and
+        grads_shape[0] is not None and
         grads_shape[3] is not None):
       assert grads_shape[0] == inputs_shape.op._value[0]
       assert grads_shape[3] == inputs_shape.op._value[3]
@@ -1107,7 +1107,7 @@ class AvgPool2DGrad(_Pooling2DBase):
 
 class Sigmoid(Operation, _ShapeAsIs):
   def _run(self, inputs):
-    outputs = 1 / (1 + np.exp(-inputs)) 
+    outputs = 1 / (1 + np.exp(-inputs))
     return outputs
 
   def _grad_func(self, in_grad_tensors):
@@ -1125,7 +1125,7 @@ class SigmoidGrad(Operation, _PickFirstAmongCompatibleShapes):
     return outputs_inputs_grads
 
   def _grad_func(self, in_grad_tensors):
-    from math_ops import Mul, Sub
+    from .math_ops import Mul, Sub
 
     with self._graph.as_default_graph():
       mul = Mul(input_list=[in_grad_tensors[0], self._input_list[1]])
@@ -1135,7 +1135,7 @@ class SigmoidGrad(Operation, _PickFirstAmongCompatibleShapes):
               mul.output(0)
         ]
       )
-      mul2 = Mul(input_list=[self._input_list[0], mul1.output(0)]) 
+      mul2 = Mul(input_list=[self._input_list[0], mul1.output(0)])
       bp_outputs = Sub(input_list=[mul.output(0), mul2.output(0)])
 
       bp_grads = SigmoidGrad(input_list=[self._input_list[0], in_grad_tensors[0]])
@@ -1143,7 +1143,7 @@ class SigmoidGrad(Operation, _PickFirstAmongCompatibleShapes):
     return out_grad_tensors
 
   def _compute_shapes(self):
-    return [TensorShape(self._input_list[0].shape.raw_shape)] 
+    return [TensorShape(self._input_list[0].shape.raw_shape)]
 
 
 class Tanh(Operation, _ShapeAsIs):
@@ -1161,10 +1161,10 @@ class Tanh(Operation, _ShapeAsIs):
 class TanhGrad(Operation, _PickFirstAmongCompatibleShapes):
   def _run(self, outputs, grads):
     outputs_inputs_grads = (1 - outputs * outputs) * grads
-    return outputs_inputs_grads    
+    return outputs_inputs_grads
 
   def _grad_func(self, in_grad_tensors):
-    from math_ops import Mul
+    from .math_ops import Mul
 
     with self._graph.as_default_graph():
       mul = Mul(
@@ -1183,7 +1183,7 @@ class TanhGrad(Operation, _PickFirstAmongCompatibleShapes):
 class Relu(Operation, _ShapeAsIs):
   def _run(self, inputs):
     outputs = np.maximum(0, inputs)
-    return outputs 
+    return outputs
 
   def _grad_func(self, in_grad_tensors):
     with self._graph.as_default_graph():
@@ -1200,22 +1200,22 @@ class ReluGrad(Operation, _PickFirstAmongCompatibleShapes):
   def _grad_func(self, in_grad_tensors):
     with self._graph.as_default_graph():
       op, tensor_index = self._input_list[0].op, self._input_list[0].tensor_index
-      bp_grads = ReluGrad(input_list=[self._input_list[0], in_grad_tensors[0]]) 
+      bp_grads = ReluGrad(input_list=[self._input_list[0], in_grad_tensors[0]])
       out_grad_tensors = [op.get_zeros_tensor(tensor_index=tensor_index), bp_grads.output(0)]
-    return out_grad_tensors 
+    return out_grad_tensors
 
 
 class SoftmaxCrossEntropyWithLogits(Operation):
 
   def _run(self, logits, labels):
     exp_logits = np.exp(logits - np.max(logits))
-    softmax = exp_logits / np.sum(exp_logits, axis=-1, keepdims=True) 
+    softmax = exp_logits / np.sum(exp_logits, axis=-1, keepdims=True)
     loss = np.sum(-np.log(softmax) * labels, axis=-1).astype("float32")
     return loss
 
   def _grad_func(self, in_grad_tensors):
-    from array_ops import ExpandDims, Squeeze
-    from math_ops import BatchMatMul, Mul, Sub, Neg, Add
+    from .array_ops import ExpandDims, Squeeze
+    from .math_ops import BatchMatMul, Mul, Sub, Neg, Add
 
     with self._graph.as_default_graph():
       softmax = Softmax(input_list=[self._input_list[0]])
@@ -1227,7 +1227,7 @@ class SoftmaxCrossEntropyWithLogits(Operation):
         ])
       neg = Neg(input_list=[log_softmax.output(0)])
       bp_labels = Mul(input_list=[neg.output(0), ed.output(0)])
-      bp_logits = Mul(input_list=[sub.output(0), ed.output(0)])   
+      bp_logits = Mul(input_list=[sub.output(0), ed.output(0)])
 
       out_grad_tensors = [bp_logits.output(0), bp_labels.output(0)]
     return out_grad_tensors
@@ -1262,10 +1262,10 @@ class LogSoftmax(Operation, _ShapeAsIs):
     return outputs
 
   def _grad_func(self, in_grad_tensors):
-    from math_ops import Exp, Sum, Mul, Sub
+    from .math_ops import Exp, Sum, Mul, Sub
 
     with self._graph.as_default_graph():
-      exp = Exp(input_list=[self.output(0)])  
+      exp = Exp(input_list=[self.output(0)])
       sum0 = Sum(
           keepdims=True,
           input_list=[
@@ -1286,9 +1286,9 @@ class Softmax(Operation, _ShapeAsIs):
     return softmax
 
   def _grad_func(self, in_grad_tensors):
-    from math_ops import Sum, Mul, Sub
+    from .math_ops import Sum, Mul, Sub
 
-    with self._graph.as_default_graph(): 
+    with self._graph.as_default_graph():
       mul = Mul(input_list=[in_grad_tensors[0], self.output(0)])
       sum0 = Sum(
           keepdims=True,
@@ -1331,7 +1331,7 @@ class LeakyReluGrad(Operation, _PickFirstAmongCompatibleShapes):
     return outputs_inputs_grads
 
   def _grad_func(self, in_grad_tensors):
-    from generic_ops import ZerosLike
+    from .generic_ops import ZerosLike
 
     with self._graph.as_default_graph():
       bp_inputs = ZerosLike(input_list=[self._input_list[0]])

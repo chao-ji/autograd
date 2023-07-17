@@ -1,12 +1,12 @@
 """Operations on multi-dimensional arrays."""
 import numpy as np
 
-from operation import Operation
+from .operation import Operation
 
-from generic_ops import Const
-from math_ops import Sum, Mean
-from tensor_shape import TensorShape
-from mixins import _ShapeAsIs, _TensorShapeAsInput
+from .generic_ops import Const
+from .math_ops import Sum, Mean
+from .tensor_shape import TensorShape
+from .mixins import _ShapeAsIs, _TensorShapeAsInput
 
 
 class Reshape(Operation):
@@ -36,7 +36,7 @@ class Reshape(Operation):
       target_shape = self._input_list[1].op._value
       assert (target_shape < 0).sum() <= 1
       if (target_shape >= 1).all():
-        assert self._input_list[0].shape._partial_size() <= np.prod(target_shape).item() 
+        assert self._input_list[0].shape._partial_size() <= np.prod(target_shape).item()
     if self._input_list[1].shape.level > 0:
       assert self._input_list[1].shape.ndims <= 1
 
@@ -90,7 +90,7 @@ class Transpose(Operation):
     if self._input_list[1].shape.level > 0:
       assert self._input_list[1].shape.ndims == 1
     if self._input_list[0].shape.level > 0 and self._input_list[1].shape.level == 2:
-      assert self._input_list[0].shape.ndims == self._input_list[1].shape[0] 
+      assert self._input_list[0].shape.ndims == self._input_list[1].shape[0]
 
     # compute shapes
     if hasattr(self._input_list[1].op, "_value"):
@@ -111,7 +111,7 @@ class InvertPermutation(Operation, _ShapeAsIs):
     outputs = np.argsort(perm)
     return outputs
 
- 
+
 class Range(Operation):
 
   def _run(self, start, limit, delta):
@@ -157,7 +157,7 @@ class Pack(Operation):
         else:
           assert ndims == tensor.shape.ndims
     if ndims is not None:
-      assert -(ndims + 1) <= self._axis < ndims + 1 
+      assert -(ndims + 1) <= self._axis < ndims + 1
 
     # compute shapes
     if ndims is None:
@@ -165,7 +165,7 @@ class Pack(Operation):
     else:
       shape = TensorShape([None] * ndims)
       for tensor in self._input_list:
-        shape._merge(tensor.shape)    
+        shape._merge(tensor.shape)
       raw_shape = list(shape.raw_shape)
 
       axis = self._axis if ndims == 0 else self._axis % (ndims + 1)
@@ -176,13 +176,13 @@ class Pack(Operation):
 class Unpack(Operation):
 
   def __init__(self, num, axis, input_list, graph=None, name=None):
-    self._num = num 
+    self._num = num
     self._axis = axis
     super(Unpack, self).__init__(graph=graph, input_list=input_list, name=name)
- 
+
   def _run(self, inputs):
     axis_size = inputs.shape[self._axis]
-    outputs = np.split(inputs, axis_size, axis=self._axis) 
+    outputs = np.split(inputs, axis_size, axis=self._axis)
     outputs = [np.squeeze(output, axis=self._axis) for output in outputs]
     return outputs
 
@@ -203,14 +203,14 @@ class Unpack(Operation):
     # validation
     if self._input_list[0].shape.level > 0:
       ndims = self._input_list[0].shape.ndims
-      axis = self._axis if ndims == 0 else self._axis % ndims  
+      axis = self._axis if ndims == 0 else self._axis % ndims
       if self._input_list[0].shape[axis] is not None:
         assert self._input_list[0].shape[axis] == self._num
       assert -ndims <= axis < ndims
 
     # compute shapes
     if self._input_list[0].shape.level == 0:
-      return [TensorShape(None) for _ in range(self._num)] 
+      return [TensorShape(None) for _ in range(self._num)]
     else:
       raw_shape = list(self._input_list[0].shape.raw_shape)
       raw_shape = raw_shape[:axis] + raw_shape[axis + 1:]
@@ -283,11 +283,11 @@ class Tile(Operation):
         raw_shape.append(None if size is None else size * multiple)
       return [TensorShape(raw_shape)]
     elif self._input_list[0].shape.level == 0:
-      if self._input_list[1].shape.level > 0 and self._input_list[1].shape[0] is not None: 
+      if self._input_list[1].shape.level > 0 and self._input_list[1].shape[0] is not None:
         ndims = self._input_list[1].shape[0]
         return [TensorShape([None] * ndims)]
       else:
-        return [TensorShape(None)] 
+        return [TensorShape(None)]
     else:
       ndims = self._input_list[0].shape.ndims
       return [TensorShape([None] * ndims)]
@@ -301,7 +301,7 @@ class StridedSlice(Operation):
     end = np.where(end < 0, end % shape, end)
     slices = np.stack([begin, end, strides]).T
     slice_indices_list = list(
-        map(lambda s: np.arange(s[1][0], s[1][1], s[1][2]) * 
+        map(lambda s: np.arange(s[1][0], s[1][1], s[1][2]) *
             np.prod(shape[s[0]+1:]).astype("int"), enumerate(slices)
         )
     )
@@ -312,7 +312,7 @@ class StridedSlice(Operation):
     outputs = inputs.ravel()[indices].reshape(
         tuple(map(len, slice_indices_list))
     )
-    return outputs 
+    return outputs
 
   def _grad_func(self, in_grad_tensors):
     with self._graph.as_default_graph():
@@ -339,16 +339,16 @@ class StridedSlice(Operation):
         assert tensor.shape.ndims == 1
         if tensor.shape.level == 2:
           if ndims is not None:
-            assert ndims == tensor.shape[0] 
+            assert ndims == tensor.shape[0]
           else:
             ndims = tensor.shape[0]
 
     # compute shapes
-    if (self._input_list[0].shape.level > 0 and 
+    if (self._input_list[0].shape.level > 0 and
         hasattr(self._input_list[1].op, "_value") and
         hasattr(self._input_list[2].op, "_value") and
         hasattr(self._input_list[3].op, "_value")):
-      raw_shape = [] 
+      raw_shape = []
       for i, b, e, s in zip(
           self._input_list[0].shape.raw_shape,
           self._input_list[1].op._value.tolist(),
@@ -362,7 +362,7 @@ class StridedSlice(Operation):
           e = np.where(e < 0, e % i, e)
 
           r = np.arange(b, e, s)
-         
+
           #raw_shape.append(min(r.max() + 1, i) - max(r.min(), 0))
           raw_shape.append(len(set(r.tolist()).intersection(set(np.arange(0, i).tolist()))))
 
@@ -370,7 +370,7 @@ class StridedSlice(Operation):
     elif self._input_list[0].shape.level > 0:
       ndims = self._input_list[0].shape.ndims
       return [TensorShape([None] * ndims)]
-    elif self._input_list[1].shape.level == 2: 
+    elif self._input_list[1].shape.level == 2:
       ndims = self._input_list[1].shape[0]
       return [TensorShape([None] * ndims)]
     elif self._input_list[2].shape.level == 2:
@@ -402,14 +402,14 @@ class StridedSliceGrad(Operation):
     inputs_grads = np.zeros(shape).ravel()
     inputs_grads[indices] = grads.ravel()
     inputs_grads = inputs_grads.reshape(shape)
-    
+
     return inputs_grads
 
   def _grad_func(self, in_grad_tensors):
     with self._graph.as_default_graph():
       bp_grads = StridedSlice(
           input_list=in_grad_tensors + self._input_list[1:4]
-      )     
+      )
       out_grad_tensors = [bp_grads.output(0)]
     return out_grad_tensors
 
@@ -447,7 +447,7 @@ class StridedSliceGrad(Operation):
       ndims = self._input_list[3].shape[0]
       return [TensorShape([None] * ndims)]
     elif self._input_shape[4].shape.level > 0:
-      ndims = self._input_shape[4].shape.ndims 
+      ndims = self._input_shape[4].shape.ndims
       return [TensorShape([None] * ndims)]
     else:
       return [TensorShape(None)]
@@ -479,7 +479,7 @@ class Slice(Operation):
     return outputs
 
   def _grad_func(self, in_grad_tensors):
-    from math_ops import Sub
+    from .math_ops import Sub
 
     with self._graph.as_default_graph():
 
@@ -488,7 +488,7 @@ class Slice(Operation):
               op.get_shape_tensor(tensor_index=tensor_index),
               self.get_shape_tensor(tensor_index=0),
           ],
-      ) 
+      )
       sub1 = Sub(
           input_list=[sub.output(0), self._input_list[1]],
       )
@@ -498,7 +498,7 @@ class Slice(Operation):
               op.get_rank_tensor(tensor_index=tensor_index),
               Const(value=np.asarray(1, dtype="int32")).output(0)
           ],
-      ) 
+      )
       reshape = Reshape(input_list=[self._input_list[1], pack.output(0)])
       reshape1 = Reshape(input_list=[sub1.output(0), pack.output(0)])
       concat = Concat(
@@ -532,15 +532,15 @@ class Slice(Operation):
             ndims = tensor.shape[0]
 
     if hasattr(self._input_list[1].op, "_value"):
-      assert (self._input_list[1].op._value >= 0).all() 
+      assert (self._input_list[1].op._value >= 0).all()
     if hasattr(self._input_list[2].op, "_value"):
       assert (self._input_list[2].op._value >= -1).all()
 
     # compute shapes
     if (self._input_list[0].shape.level > 0 and
         hasattr(self._input_list[1].op, "_value") and
-        hasattr(self._input_list[2].op, "_value")): 
-      raw_shape = [] 
+        hasattr(self._input_list[2].op, "_value")):
+      raw_shape = []
       for i, b, s in zip(
           self._input_list[0].shape,
           self._input_list[1].op._value.tolist(),
@@ -559,7 +559,7 @@ class Slice(Operation):
       return [TensorShape([None] * ndims)]
     elif self._input_list[2].shape.level == 2:
       ndims = self._input_list[2].shape[0]
-      return [TensorShape([None] * ndims)] 
+      return [TensorShape([None] * ndims)]
     else:
       return [TensorShape(None)]
 
@@ -569,30 +569,30 @@ class Slice(Operation):
     elif (hasattr(self._input_list[1].op, "_value") and
           hasattr(self._input_list[2].op, "_value")
       ):
-      raw_shape = []  
+      raw_shape = []
       for i, b, s in zip(
           self._input_list[0].shape.raw_shape,
           self._input_list[1].op._value.astype("int32").tolist(),
           self._input_list[2].op._value.astype("int32").tolist(),
-        ): 
+        ):
         if i is None:
           raw_shape.append(None if s == -1 else s)
         else:
           raw_shape.append(i - b if s == -1 else s)
-      return TensorShape(raw_shape) 
+      return TensorShape(raw_shape)
     else:
-      return TensorShape([None] * self._input_list[0].shape.ndims) 
-      
+      return TensorShape([None] * self._input_list[0].shape.ndims)
+
 
 class Concat(Operation):
 
   def _run(self, axis, *input_tensor_values):
-    outputs = np.concatenate(input_tensor_values, axis=axis) 
+    outputs = np.concatenate(input_tensor_values, axis=axis)
     return outputs
 
   def _grad_func(self, in_grad_tensors):
-    from math_ops import FloorMod
-    
+    from .math_ops import FloorMod
+
     with self._graph.as_default_graph():
       shapes = [
           arg.op.get_shape_tensor(tensor_index=arg.tensor_index)
@@ -606,7 +606,7 @@ class Concat(Operation):
       )
       offset = ConcatOffset(
           input_list=[mod.output(0)]+shapes,
-      ) 
+      )
       out_grad_tensors = []
       for i in range(len(self._input_list) - 1):
         out_grad_tensors.append(
@@ -617,7 +617,7 @@ class Concat(Operation):
 
   def _get_bp_indices(self):
     backprop_indices = list(range(1, len(self._input_list)))
-    return backprop_indices 
+    return backprop_indices
 
   def _compute_shapes(self):
     # validation
@@ -637,7 +637,7 @@ class Concat(Operation):
       if ndims is not None:
         axis = axis if ndims == 0 else axis % ndims
       if len(diff_axes) == 1:
-        assert list(diff_axes)[0] == axis 
+        assert list(diff_axes)[0] == axis
 
     # compute shapes
     if ndims is None:
@@ -647,7 +647,7 @@ class Concat(Operation):
         shape = TensorShape([None] * ndims)
         for tensor in self._input_list[1:]:
           shape._merge(tensor.shape, skip=[axis])
-        
+
         size = []
         for tensor in self._input_list[1:]:
           if tensor.shape.level == 0 or tensor.shape[axis] is None:
@@ -657,7 +657,7 @@ class Concat(Operation):
             size.append(tensor.shape[axis])
         raw_shape = list(shape._raw_shape)
         raw_shape[axis] = None if size is None else sum(size)
- 
+
         return [TensorShape(raw_shape)]
       else:
         return [TensorShape([None] * ndims)]
@@ -673,7 +673,7 @@ class ConcatOffset(Operation):
 
   @property
   def num_outputs(self):
-    return len(self._input_list) - 1 
+    return len(self._input_list) - 1
 
   def _compute_shapes(self):
     # validation
@@ -732,7 +732,7 @@ class Pad(Operation):
               slice0.output(0),
               Const(value=np.asarray(-1, dtype="int32")).output(0)
           ],
-      ) 
+      )
 
       bp_inputs = Slice(
           input_list=[
@@ -828,10 +828,10 @@ class ExpandDims(Operation):
 
     # compute shapes
     if axis is not None and raw_shape is not None:
-      axis = axis % (ndims + 1) 
+      axis = axis % (ndims + 1)
       return [TensorShape(raw_shape[:axis] + [1] + raw_shape[axis:])]
     elif raw_shape is not None:
-      return [TensorShape([None] * (ndims + 1))] 
+      return [TensorShape([None] * (ndims + 1))]
     else:
       return [TensorShape(None)]
 
@@ -846,7 +846,7 @@ class Squeeze(Operation):
     super(Squeeze, self).__init__(graph=graph, input_list=input_list, name=name)
 
   def _run(self, inputs):
-    outputs = np.squeeze(inputs, axis=self._axis) 
+    outputs = np.squeeze(inputs, axis=self._axis)
     return outputs
 
   def _grad_func(self, in_grad_tensors):
@@ -870,11 +870,11 @@ class Squeeze(Operation):
         axis = np.asarray(self._axis)
         assert np.logical_and(-ndims <= axis, axis < ndims).all()
         axis = axis % ndims
-        assert all([i not in axis or s == 1 or s is None for i, s in enumerate(self._input_list[0].shape)]) 
+        assert all([i not in axis or s == 1 or s is None for i, s in enumerate(self._input_list[0].shape)])
 
     # compute shapes
-    if ndims is not None: 
-      if self._input_list[0].shape.level == 2: 
+    if ndims is not None:
+      if self._input_list[0].shape.level == 2:
         if self._axis is None:
           raw_shape = [s for s in self._input_list[0].shape if s != 1]
         else:
@@ -887,7 +887,7 @@ class Squeeze(Operation):
         else:
           axis = np.asarray(self._axis) % ndims
           raw_shape = [s for i, s in enumerate(self._input_list[0].shape) if i not in axis]
-        return [TensorShape(raw_shape)] 
+        return [TensorShape(raw_shape)]
     else:
       return [TensorShape(None)]
 

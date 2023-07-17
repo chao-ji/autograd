@@ -2,7 +2,7 @@
 import numpy as np
 from collections import defaultdict
 
-from containers import get_default_graph
+from .containers import get_default_graph
 
 
 class Operation(object):
@@ -30,7 +30,7 @@ class Operation(object):
 
   def _get_bp_indices(self):
     if not hasattr(self, "_grad_func"):
-      bp_indices = [] 
+      bp_indices = []
     else:
       bp_indices = list(range(len(self._input_list)))
     return bp_indices
@@ -70,7 +70,7 @@ class Operation(object):
       self._graph._runtime._values[self.id].append(outputs)
 
     #print(self)
-    #print("a", [o.shape if hasattr(o, "shape") else () for o in self._graph._runtime._values[self.id]]) 
+    #print("a", [o.shape if hasattr(o, "shape") else () for o in self._graph._runtime._values[self.id]])
     #print("b", [o.shape.raw_shape for o in self._outputs])
     #print()
 
@@ -99,18 +99,22 @@ class Operation(object):
   def backprop(self, x_tensors, dy_tensors=None):
     """
     Args:
-      x_tensors (List[Tensor]): list of tensors whose gradients are to be returned. 
+      x_tensors (List[Tensor]): list of tensors whose gradients are to be returned.
       dy_tensors (List[Tensor]): list of gradient tensors w.r.t. the outputs of
         this Op. If None, defaults to tensor filled with ones.
-   
+
     Returns:
-      dx_tensors (List[Tensor]):  
+      dx_tensors (List[Tensor]):
     """
-    from math_ops import AddN 
-    from generic_ops import OnesLike
+    from .math_ops import AddN
+    from .generic_ops import OnesLike
 
     if dy_tensors is None:
       dy_tensors = [OnesLike(input_list=[y_tensor]).output(0) for y_tensor in self._outputs]
+    else:
+      assert len(self._outputs) == len(dy_tensors)
+      for y_tensor, dy_tensor in zip(self._outputs, dy_tensors):
+        assert y_tensor.shape._compatible_with(dy_tensor.shape)
 
     cum_grad = dict()
     expected_backprops = self._compute_expected_backprops()
@@ -184,13 +188,20 @@ class Operation(object):
     return False
 
   def _create_output_tensors(self):
-    from tensor import Tensor
+    """Set attribute `self._outputs` as the created tensors.
+
+    Args:
+      outputs (List[Tensor]): the created Tensor instances.
+    """
+    from .tensor import Tensor
 
     if not hasattr(self, "_outputs"):
       shapes = self._compute_shapes()
       if shapes is None:
+        # For Ops with no output tensors, set `self._outputs` to empty list.
         self._outputs = []
       else:
+        # Assign tensor index and shape to each Tensor.
         self._outputs = [Tensor(self, i, shape) for i, shape in zip(range(self.num_outputs), shapes)]
     return self._outputs
 
@@ -215,22 +226,21 @@ class Operation(object):
     Returns:
       shape_tensor (Tensor): a shape tensor.
     """
-    from generic_ops import Shape
+    from .generic_ops import Shape
     return self._get_dependent_tensor(Shape, self.name+"_Shape", self._graph._shape_tensors, tensor_index)
 
   def get_size_tensor(self, tensor_index=0):
-    from generic_ops import Size
+    from .generic_ops import Size
     return self._get_dependent_tensor(Size, self.name+"_Size", self._graph._size_tensors, tensor_index)
 
   def get_rank_tensor(self, tensor_index=0):
-    from generic_ops import Rank
+    from .generic_ops import Rank
     return self._get_dependent_tensor(Rank, self.name+"_Rank", self._graph._rank_tensors, tensor_index)
 
   def get_zeros_tensor(self, tensor_index=0):
-    from generic_ops import ZerosLike
+    from .generic_ops import ZerosLike
     return self._get_dependent_tensor(ZerosLike, self.name+"_ZerosLike", self._graph._zeroslike_tensors, tensor_index)
 
   def get_ones_tensor(self, tensor_index=0):
-    from generic_ops import OnesLike
+    from .generic_ops import OnesLike
     return self._get_dependent_tensor(OnesLike, self.name+"_OnesLike", self._graph._oneslike_tensors, tensor_index)
-

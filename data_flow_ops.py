@@ -1,11 +1,11 @@
 """Data flow related Operations."""
 import numpy as np
 
-from operation import Operation
-from generic_ops import Const
+from .operation import Operation
+from .generic_ops import Const
 
-from mixins import _ShapeAsIs
-from tensor_shape import TensorShape
+from .mixins import _ShapeAsIs
+from .tensor_shape import TensorShape
 
 
 class DynamicStitch(Operation):
@@ -21,7 +21,7 @@ class DynamicStitch(Operation):
     indices, data = inputs_list[:size], inputs_list[size:]
 
     data = np.concatenate(
-        [data[i].reshape((-1,) + data[i].shape[indices[i].ndim:]) 
+        [data[i].reshape((-1,) + data[i].shape[indices[i].ndim:])
             for i in range(len(data))
         ]
     )
@@ -54,7 +54,7 @@ class DynamicStitch(Operation):
 
   def _compute_shapes(self):
     # validation
-    assert len(self._input_list) % 2 == 0  
+    assert len(self._input_list) % 2 == 0
 
     size = len(self._input_list) // 2
     constant = None
@@ -66,7 +66,7 @@ class DynamicStitch(Operation):
           constant_ndims = data.shape.ndims - indices.shape.ndims
         else:
           assert data.shape.ndims - indices.shape.ndims == constant_ndims
- 
+
         if indices.shape.level == 2 and data.shape.level == 2:
           if constant is None:
             constant = TensorShape(data.shape.raw_shape[-constant_ndims:])
@@ -80,8 +80,8 @@ class DynamicStitch(Operation):
     elif constant_ndims is not None:
       return [TensorShape([None] * (constant_ndims + 1))]
     else:
-      return [TensorShape(None)]    
-      
+      return [TensorShape(None)]
+
 
 class Gather(Operation):
   def _run(self, params, indices, axis):
@@ -89,8 +89,8 @@ class Gather(Operation):
     return outputs
 
   def _grad_func(self, in_grad_tensors):
-    from array_ops import Slice, Concat, Fill, ExpandDims, Range, Transpose
-    from math_ops import Sub, Add, FloorMod
+    from .array_ops import Slice, Concat, Fill, ExpandDims, Range, Transpose
+    from .math_ops import Sub, Add, FloorMod
 
     with self._graph.as_default_graph():
 
@@ -149,7 +149,7 @@ class Gather(Operation):
 
       transpose1 = Transpose(input_list=[ds.output(0), perm1.output(0)])
 
-      shape_tensor = transpose1.get_shape_tensor(tensor_index=0) 
+      shape_tensor = transpose1.get_shape_tensor(tensor_index=0)
       ed_tensor = ExpandDims(
               input_list=[
                   mod_tensor,
@@ -162,16 +162,16 @@ class Gather(Operation):
           ed_tensor,
           one_array_tensor
         ])
- 
+
       op, tensor_index = self._input_list[0].op, self._input_list[0].tensor_index
       slice1 = Slice(input_list=[
           op.get_shape_tensor(tensor_index=tensor_index),
           ed_tensor,
           one_array_tensor
           ])
- 
-      sub = Sub(input_list=[slice1.output(0), slice0.output(0)]) 
- 
+
+      sub = Sub(input_list=[slice1.output(0), slice0.output(0)])
+
       slice2 = Slice(input_list=[
           shape_tensor,
           zero_array_tensor,
@@ -190,7 +190,7 @@ class Gather(Operation):
           sub.output(0),
           slice3.output(0)
         ])
-  
+
       fill = Fill(input_list=[
           concat.output(0),
           zero_scalar_tensor
@@ -222,7 +222,7 @@ class Gather(Operation):
           hasattr(self._input_list[2].op, "_value")
         ):
         axis = self._input_list[2].op._value.item()
-        params_shape = list(self._input_list[0].shape.raw_shape) 
+        params_shape = list(self._input_list[0].shape.raw_shape)
         indices_shape = list(self._input_list[1].shape.raw_shape)
 
         raw_shape = params_shape[:axis] + indices_shape + params_shape[axis+1:]
@@ -246,8 +246,8 @@ class BroadcastTo(Operation):
     return outputs
 
   def _grad_func(self, in_grad_tensors):
-    from math_ops import BroadcastGradientArgs, Sum
-    from array_ops import Reshape
+    from .math_ops import BroadcastGradientArgs, Sum
+    from .array_ops import Reshape
 
     with self._graph.as_default_graph():
       op, tensor_index = self._input_list[0].op, self._input_list[0].tensor_index
@@ -289,7 +289,7 @@ class BroadcastTo(Operation):
       ndims = self._input_list[1].shape[0]
       return [TensorShape([None] * ndims)]
     else:
-      return [TensorShape(None)] 
+      return [TensorShape(None)]
 
 
 class Select(Operation):
@@ -299,8 +299,8 @@ class Select(Operation):
     return outputs
 
   def _grad_func(self, in_grad_tensors):
-    from math_ops import Sum, BroadcastGradientArgs
-    from array_ops import Reshape
+    from .math_ops import Sum, BroadcastGradientArgs
+    from .array_ops import Reshape
 
     with self._graph.as_default_graph():
 
@@ -331,7 +331,7 @@ class Select(Operation):
       sum0 = Sum(input_list=[select.output(0), bga.output(0)])
       sum1 = Sum(input_list=[select1.output(0), bga1.output(0)])
       bp_x = Reshape(input_list=[sum0.output(0), shape_tensor])
-      bp_y = Reshape(input_list=[sum1.output(0), shape1_tensor]) 
+      bp_y = Reshape(input_list=[sum1.output(0), shape1_tensor])
       out_grad_tensors = [bp_x.output(0), bp_y.output(0)]
     return out_grad_tensors
 
@@ -344,9 +344,9 @@ class Select(Operation):
     x_shape = self._input_list[1].shape
     y_shape = self._input_list[2].shape
 
-    assert (c_shape._broadcastable_with(x_shape) and 
-        c_shape._broadcastable_with(y_shape) and 
-        x_shape._broadcastable_with(y_shape)) 
+    assert (c_shape._broadcastable_with(x_shape) and
+        c_shape._broadcastable_with(y_shape) and
+        x_shape._broadcastable_with(y_shape))
 
     # compute shapes
     if c_shape.level > 0 and x_shape.level > 0 and y_shape.level > 0:
@@ -386,5 +386,3 @@ class Identity(Operation, _ShapeAsIs):
   def _grad_func(self, in_grad_tensors):
     out_grad_tensors = in_grad_tensors
     return out_grad_tensors
-
-

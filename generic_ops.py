@@ -1,8 +1,8 @@
-from operation import Operation
-from tensor_shape import TensorShape
+from .operation import Operation
+from .tensor_shape import TensorShape
 import numpy as np
 
-from mixins import _ShapeAsIs, _ScalarShape
+from .mixins import _ShapeAsIs, _ScalarShape
 
 
 class Const(Operation):
@@ -12,7 +12,7 @@ class Const(Operation):
 
   def _run(self):
     """Returns numpy array."""
-    return self._value   
+    return self._value
 
   def _compute_shapes(self):
     return [TensorShape(list(self._value.shape))]
@@ -36,7 +36,7 @@ class Shape(Operation):
     return outputs
 
   def _compute_shapes(self):
-    return [TensorShape([None]) if tensor.shape.level == 0 else 
+    return [TensorShape([None]) if tensor.shape.level == 0 else
         TensorShape([tensor.shape.ndims]) for tensor in self._input_list
     ]
 
@@ -51,4 +51,3 @@ class Rank(Operation, _ScalarShape):
   def _run(self, tensor_value):
     outputs = np.asarray(len(tensor_value.shape), dtype="int32")
     return outputs
-

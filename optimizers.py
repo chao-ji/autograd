@@ -18,7 +18,7 @@ class Optimizer(object):
 
   def __repr__(self):
     """Displays the initializer name and list of parameter name and value pairs.
-    """ 
+    """
     if self._params_str:
       return '<%s:%s>' % (type(self).__name__, self._params_str)
     else:
@@ -36,15 +36,20 @@ class Optimizer(object):
 
 class GradientDescentOptimizer(Optimizer):
   """The Vanilla Gradient Descent Optimizer."""
-  def apply_gradients(self, grads_and_vars):
+  def apply_gradients(self, grads_and_vars, runtime):
     """Apply the computed gradient w.r.t. trainable variables.
 
     Args:
       grads_and_vars: a list of (gradient, variable) pairs, where gradient is
         numpy array, and variable is a Node instance.
     """
+
     for grad, var in grads_and_vars:
-      var.set_val(var.val - self._params['alpha'] * grad) 
+      var_id = runtime.get_tensor_value(var).item().id
+      var_value = runtime.get_variable_value(var_id).astype("float32")
+      grad_value = runtime.get_tensor_value(grad).astype("float32")
+
+      runtime.set_variable_value(var_id, var_value - self._params["alpha"] * grad_value)
 
 
 class AdamOptimizer(Optimizer):
@@ -56,11 +61,11 @@ class AdamOptimizer(Optimizer):
       params: a dict mapping from parameter names to parameters.
     """
     self._params = params
-    self._params_str = ', '.join(['%s=%s' % (k, v) for k, v in params.items() 
+    self._params_str = ', '.join(['%s=%s' % (k, v) for k, v in params.items()
         if k in ('alpha', 'beta1', 'beta2', 'epsilon')])
 
     self._t = 0
-    self._m = dict() 
+    self._m = dict()
     self._v = dict()
 
   def apply_gradients(self, grads_and_vars, runtime):
@@ -70,15 +75,15 @@ class AdamOptimizer(Optimizer):
       grads_and_vars: a list of (gradient, variable) pairs, where gradient is
         numpy array, and variable is a Node instance.
     """
-    alpha, beta1, beta2, epsilon = (np.asarray(self._params['alpha'], "float32"), 
-                                    np.asarray(self._params['beta1'], "float32"), 
-                                    np.asarray(self._params['beta2'], "float32"), 
+    alpha, beta1, beta2, epsilon = (np.asarray(self._params['alpha'], "float32"),
+                                    np.asarray(self._params['beta1'], "float32"),
+                                    np.asarray(self._params['beta2'], "float32"),
                                     np.asarray(self._params['epsilon'], "float32"))
     t = self._t + 1
     m = self._m
     v = self._v
     alpha_t = alpha * np.sqrt(1 - np.power(beta2, t)) / (1 - np.power(beta1, t))
-    alpha_t = alpha_t.astype('float32') 
+    alpha_t = alpha_t.astype('float32')
 
     for grad, var in grads_and_vars:
       var_id = runtime.get_tensor_value(var).item().id
@@ -86,9 +91,9 @@ class AdamOptimizer(Optimizer):
       var_value = runtime.get_variable_value(var_id).astype("float32")
       grad_value = runtime.get_tensor_value(grad).astype("float32")
 
-      m[var_id] = beta1 * m.get(var_id, np.zeros(var_shape, 
+      m[var_id] = beta1 * m.get(var_id, np.zeros(var_shape,
           dtype="float32")) + (1 - beta1) * grad_value
-      v[var_id] = beta2 * v.get(var_id, np.zeros(var_shape, 
+      v[var_id] = beta2 * v.get(var_id, np.zeros(var_shape,
           dtype="float32")) + (1 - beta2) * grad_value * grad_value
       runtime.set_variable_value(
           var_id,
@@ -122,18 +127,18 @@ class RMSPropOptimizer(Optimizer):
       grads_and_vars: a list of (gradient, variable) pairs, where gradient is
         numpy array, and variable is a Node instance.
     """
-    alpha, rho, momentum, epsilon = (self._params['alpha'], 
+    alpha, rho, momentum, epsilon = (self._params['alpha'],
                                      self._params['rho'],
-                                     self._params['momentum'], 
+                                     self._params['momentum'],
                                      self._params['epsilon'])
 
     mean_square = self._mean_square
     moment = self._moment
 
     #for grad, var in grads_and_vars:
-    #  mean_square[var.name] = (rho * mean_square.get(var.name, 
+    #  mean_square[var.name] = (rho * mean_square.get(var.name,
     #      np.zeros(var.shape._raw_shape)) + (1 - rho) * grad * grad)
-    #  moment[var.name] = momentum * moment.get(var.name, 
+    #  moment[var.name] = momentum * moment.get(var.name,
     #      np.zeros(var.shape._raw_shape)) + alpha * grad / (np.sqrt(
     #      mean_square[var.name]) + epsilon)
     #  var.set_val(var.val - moment[var.name])
