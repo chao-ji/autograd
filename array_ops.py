@@ -9,6 +9,7 @@ from .tensor_shape import TensorShape
 
 
 class Reshape(Operation):
+  """Reshape a tensor to a target shape."""
 
   def _run(self, inputs, shape):
     outputs = np.reshape(inputs, shape.astype("int32"))
