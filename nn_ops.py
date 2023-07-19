@@ -22,7 +22,8 @@ class _Filters2DBase(Operation):
     self._strides = strides
     self._padding = padding
     super(_Filters2DBase, self).__init__(
-        graph=graph, input_list=input_list, name=name)
+        graph=graph, input_list=input_list, name=name
+    )
 
   def _get_shapes(self, inputs_shape, filters_size):
     """Compute the spatial dimensions of the outputs tensor, and the padding
@@ -51,21 +52,23 @@ class _Filters2DBase(Operation):
       out_height = int(np.ceil(float(height) / strides_height))
       out_width = int(np.ceil(float(width) / strides_width))
 
-      pad_height = (max(filters_height - strides_height, 0)
-          if height % strides_height == 0
-          else max(filters_height - height % strides_height, 0))
-      pad_width = (max(filters_width - strides_width, 0)
-          if width % strides_width== 0
-          else max(filters_width - width % strides_width, 0))
-      padding = (pad_height // 2,
-                 pad_height - pad_height // 2,
-                 pad_width // 2,
-                 pad_width - pad_width // 2)
+      pad_height = (
+          max(filters_height - strides_height, 0) if height % strides_height
+          == 0 else max(filters_height - height % strides_height, 0)
+      )
+      pad_width = (
+          max(filters_width - strides_width, 0) if width %
+          strides_width == 0 else max(filters_width - width % strides_width, 0)
+      )
+      padding = (
+          pad_height // 2, pad_height - pad_height // 2, pad_width // 2,
+          pad_width - pad_width // 2
+      )
     elif self._padding == "VALID":
       out_height = int(
-            np.ceil(float(height - filters_height + 1) / strides_height))
-      out_width = int(
-          np.ceil(float(width - filters_width + 1) / strides_width))
+          np.ceil(float(height - filters_height + 1) / strides_height)
+      )
+      out_width = int(np.ceil(float(width - filters_width + 1) / strides_width))
       padding = 0, 0, 0, 0
     else:
       raise ValueError(f"Invalid padding scheme: {padding}")
@@ -106,16 +109,19 @@ class _Filters2DBase(Operation):
     strides_height, strides_width = self._strides
     filters_height, filters_width = filters_size
     h_col_indices = np.arange(
-        0, pad_height - filters_height + 1, strides_height)
-    w_col_indices = np.arange(
-        0, pad_width - filters_width + 1, strides_width)
+        0, pad_height - filters_height + 1, strides_height
+    )
+    w_col_indices = np.arange(0, pad_width - filters_width + 1, strides_width)
     w_grid, h_grid = np.meshgrid(w_col_indices, h_col_indices)
     w_index_grid, h_index_grid = np.meshgrid(
-        np.arange(w_col_indices.shape[0]), np.arange(h_col_indices.shape[0]))
-    img_col_index = np.vstack([h_grid.ravel(),
-                               w_grid.ravel(),
-                               h_index_grid.ravel(),
-                               w_index_grid.ravel()]).T
+        np.arange(w_col_indices.shape[0]), np.arange(h_col_indices.shape[0])
+    )
+    img_col_index = np.vstack([
+        h_grid.ravel(),
+        w_grid.ravel(),
+        h_index_grid.ravel(),
+        w_index_grid.ravel()
+    ]).T
     return img_col_index
 
   def _pad(self, inputs, padding):
@@ -134,8 +140,7 @@ class _Filters2DBase(Operation):
     """
     pad_value = self._pad_value if hasattr(self, "_pad_value") else 0
     inputs_pad = np.pad(
-        inputs,
-        [[0, 0], padding[:2], padding[2:], [0, 0]],
+        inputs, [[0, 0], padding[:2], padding[2:], [0, 0]],
         mode="constant",
         constant_values=pad_value
     )
@@ -162,13 +167,13 @@ class _Filters2DBase(Operation):
     filters_height, filters_width = filters_size
 
     # [out_height * out_width, 4]
-    img_col_index = self._get_img_col_index(
-        (inputs.shape[1] + padding[0] + padding[1],
-         inputs.shape[2] + padding[2] + padding[3]),
-        (filters_height, filters_width)
-    )
+    img_col_index = self._get_img_col_index((
+        inputs.shape[1] + padding[0] + padding[1],
+        inputs.shape[2] + padding[2] + padding[3]
+    ), (filters_height, filters_width))
 
     inputs = self._pad(inputs, padding)
+
     def _func(indices):
       """Slice a patch from the 4D inputs tensor in dim1 (height) and dim2
       (width) of the size of the filters tensor.
@@ -177,8 +182,11 @@ class _Filters2DBase(Operation):
       filters_width].
       """
       h, w = indices
-      return inputs[:, h:h+filters_height, w:w+filters_width, :
-          ].transpose(0, 3, 1, 2).reshape((batch_size, -1))
+      return inputs[:, h:h + filters_height,
+                    w:w + filters_width, :].transpose(0, 3, 1, 2).reshape(
+                        (batch_size, -1)
+                    )
+
     inputs_mat = np.vstack(np.apply_along_axis(_func, 1, img_col_index[:, :2]))
 
     return inputs_mat
@@ -202,9 +210,9 @@ class _Filters2DBase(Operation):
     """
     out_height, out_width = out_size
     filters_height, filters_width = filters_size
-    inputs_mat = inputs_mat.reshape((
-        out_height, out_width, -1, in_channels, filters_height, filters_width
-    )).reshape(-1, filters_height * filters_width)
+    inputs_mat = inputs_mat.reshape(
+        (out_height, out_width, -1, in_channels, filters_height, filters_width)
+    ).reshape(-1, filters_height * filters_width)
     return inputs_mat
 
   def _matrixize_filters_tensor(self, filters):
@@ -236,12 +244,10 @@ class _Filters2DBase(Operation):
       inputs (tensor): 4D tensor of shape [batch_size, height, width,
         in_channels], the unpadded inputs tensor.
     """
-    slice_height = slice(
-        padding[0], -padding[1]) if padding[1] > 0 else slice(padding[0], None
-    )
-    slice_width = slice(
-        padding[2], -padding[3]) if padding[3] > 0 else slice(padding[3], None
-    )
+    slice_height = slice(padding[0], -padding[1]
+                        ) if padding[1] > 0 else slice(padding[0], None)
+    slice_width = slice(padding[2], -padding[3]
+                       ) if padding[3] > 0 else slice(padding[3], None)
     inputs = inputs[:, slice_height, slice_width]
     return inputs
 
@@ -252,7 +258,7 @@ class _Filters2DBase(Operation):
       padding,
       out_size,
       filters_size,
-    ):
+  ):
     """Transform gradients w.r.t inputs tensor in 2D matrix layout to 4D tensor
     format.
 
@@ -286,18 +292,19 @@ class _Filters2DBase(Operation):
 
     # [out_height, out_width, batch_size, filters_height, filters_width,
     # in_channels]
-    inputs_grads_tmp = inputs_grads_mat.reshape((
-        out_height, out_width, -1, in_channels, filters_height, filters_width
-        )).transpose(0, 1, 2, 4, 5, 3)
+    inputs_grads_tmp = inputs_grads_mat.reshape(
+        (out_height, out_width, -1, in_channels, filters_height, filters_width)
+    ).transpose(0, 1, 2, 4, 5, 3)
 
     def _func(indices):
       """Route gradients from `inputs_grads_tmp` to slices in `inputs_grads`."""
       h, w, h_index, w_index = indices
       inputs_grads = np.zeros(
-        (inputs_shape[0], pad_height, pad_width, inputs_shape[3]
-      ), dtype="float32")
-      inputs_grads[:, h:h+filters_height, w:w+filters_width, :
-          ] = inputs_grads_tmp[h_index, w_index]
+          (inputs_shape[0], pad_height, pad_width, inputs_shape[3]),
+          dtype="float32"
+      )
+      inputs_grads[:, h:h + filters_height,
+                   w:w + filters_width, :] = inputs_grads_tmp[h_index, w_index]
       return inputs_grads
 
     # [out_height * out_width, batch_size, pad_height, pad_width, in_channels]
@@ -311,7 +318,9 @@ class _Filters2DBase(Operation):
     inputs_grads = self._unpad(inputs_grads, padding)
     return inputs_grads
 
-  def _compute_spatial_size(self, input_size, kernel_size, stride_size, padding):
+  def _compute_spatial_size(
+      self, input_size, kernel_size, stride_size, padding
+  ):
     if padding == "SAME":
       out_size = int(np.ceil(input_size / stride_size))
     else:
@@ -350,12 +359,9 @@ class Conv2D(_Filters2DBase):
     filters_mat = self._matrixize_filters_tensor(filters)
 
     #[out_height*out_width*batch_size, out_channels]
-    outputs = np.dot(inputs_mat, filters_mat).reshape(
-        out_height,
-        out_width,
-        batch_size,
-        out_channels
-    ).transpose(2, 0, 1, 3)
+    outputs = np.dot(inputs_mat, filters_mat
+                    ).reshape(out_height, out_width, batch_size,
+                              out_channels).transpose(2, 0, 1, 3)
     return outputs
 
   def _grad_func(self, in_grad_tensors):
@@ -364,23 +370,23 @@ class Conv2D(_Filters2DBase):
       in_grad_tensors: list of (Op, tensor_index)
     """
     with self._graph.as_default_graph():
-      op, tensor_index = self._input_list[0].op, self._input_list[0].tensor_index
+      op, tensor_index = self._input_list[0].op, self._input_list[0
+                                                                 ].tensor_index
       bp_inputs = Conv2DBackpropInput(
           strides=self._strides,
           padding=self._padding,
           input_list=[
-              self._input_list[1],
-              in_grad_tensors[0],
+              self._input_list[1], in_grad_tensors[0],
               op.get_shape_tensor(tensor_index=tensor_index)
           ]
       )
-      op, tensor_index = self._input_list[1].op, self._input_list[1].tensor_index
+      op, tensor_index = self._input_list[1].op, self._input_list[1
+                                                                 ].tensor_index
       bp_filters = Conv2DBackpropFilter(
           strides=self._strides,
           padding=self._padding,
           input_list=[
-              self._input_list[0],
-              in_grad_tensors[0],
+              self._input_list[0], in_grad_tensors[0],
               op.get_shape_tensor(tensor_index=tensor_index)
           ]
       )
@@ -396,29 +402,35 @@ class Conv2D(_Filters2DBase):
       assert inputs_shape.ndims == 4
     if filters_shape.level > 0:
       assert filters_shape.ndims == 4
-    if (inputs_shape.level > 0 and inputs_shape[3] is not None and
+    if (
+        inputs_shape.level > 0 and inputs_shape[3] is not None and
         filters_shape.level > 0 and filters_shape[2] is not None
-      ):
+    ):
       assert inputs_shape[3] == filters_shape[2]
 
     # compute shapes
     batch_size = None
-    if batch_size is None and inputs_shape.level > 0 and inputs_shape[0] is not None:
+    if batch_size is None and inputs_shape.level > 0 and inputs_shape[
+        0] is not None:
       batch_size = inputs_shape[0]
     num_channels = None
     if filters_shape.level > 0 and filters_shape[3] is not None:
       num_channels = filters_shape[3]
     height, width = None, None
-    if (inputs_shape.level > 0 and filters_shape.level > 0 and
+    if (
+        inputs_shape.level > 0 and filters_shape.level > 0 and
         inputs_shape[1] is not None and filters_shape[0] is not None
-      ):
+    ):
       height = self._compute_spatial_size(
-        inputs_shape[1], filters_shape[0], self._strides[0], self._padding)
-    if (inputs_shape.level > 0 and filters_shape.level > 0 and
+          inputs_shape[1], filters_shape[0], self._strides[0], self._padding
+      )
+    if (
+        inputs_shape.level > 0 and filters_shape.level > 0 and
         inputs_shape[2] is not None and filters_shape[1] is not None
-      ):
+    ):
       width = self._compute_spatial_size(
-        inputs_shape[2], filters_shape[1], self._strides[1], self._padding)
+          inputs_shape[2], filters_shape[1], self._strides[1], self._padding
+      )
     return [TensorShape([batch_size, height, width, num_channels])]
 
 
@@ -443,7 +455,9 @@ class Conv2DBackpropInput(_Filters2DBase):
         in_channels], gradients w.r.t. the inputs tensor.
     """
     filters_height, filters_width = filters.shape[:2]
-    out_size, padding = self._get_shapes(inputs_shape, (filters_height, filters_width))
+    out_size, padding = self._get_shapes(
+        inputs_shape, (filters_height, filters_width)
+    )
     out_channels = filters.shape[3]
 
     #[out_height*out_width*batch_size, out_channels]
@@ -456,18 +470,20 @@ class Conv2DBackpropInput(_Filters2DBase):
     inputs_grads_mat = np.dot(grads_mat, filters_mat.T)
 
     inputs_grads = self._tensorize_grads_matrix(
-      inputs_grads_mat, inputs_shape, padding, out_size, (filters_height, filters_width))
+        inputs_grads_mat, inputs_shape, padding, out_size,
+        (filters_height, filters_width)
+    )
     return inputs_grads
 
   def _grad_func(self, in_grad_tensors):
     with self._graph.as_default_graph():
-      op, tensor_index = self._input_list[0].op, self._input_list[0].tensor_index
+      op, tensor_index = self._input_list[0].op, self._input_list[0
+                                                                 ].tensor_index
       bp_filters = Conv2DBackpropFilter(
           strides=self._strides,
           padding=self._padding,
           input_list=[
-              in_grad_tensors[0],
-              self._input_list[1],
+              in_grad_tensors[0], self._input_list[1],
               op.get_shape_tensor(tensor_index=tensor_index)
           ]
       )
@@ -495,9 +511,10 @@ class Conv2DBackpropInput(_Filters2DBase):
     if inputs_shape.shape.level > 0:
       inputs_shape.shape.ndims == 1
 
-    if (filters_shape.level > 0 and grads_shape.level > 0 and
+    if (
+        filters_shape.level > 0 and grads_shape.level > 0 and
         filters_shape[3] is not None and grads_shape[3] is not None
-      ):
+    ):
       assert filters_shape[3] == grads_shape[3]
 
     if hasattr(inputs_shape.op, "_value"):
@@ -512,10 +529,12 @@ class Conv2DBackpropInput(_Filters2DBase):
     if hasattr(inputs_shape.op, "_value"):
       batch_size, height, width, in_channels = inputs_shape.op._value
 
-    if grads_shape.level > 0 and grads_shape[0] is not None and batch_size is None:
+    if grads_shape.level > 0 and grads_shape[
+        0] is not None and batch_size is None:
       batch_size = grads_shape[0]
 
-    if filters_shape.level > 0 and filters_shape[2] is not None and in_channels is None:
+    if filters_shape.level > 0 and filters_shape[
+        2] is not None and in_channels is None:
       in_channels = filters_shape[2]
     return [TensorShape([batch_size, height, width, in_channels])]
 
@@ -554,20 +573,20 @@ class Conv2DBackpropFilter(_Filters2DBase):
     #[in_channels*filters_height*filters_width, out_channels]
     filters_grads_mat = np.dot(inputs_mat.T, grads_mat)
 
-    filters_grads = filters_grads_mat.reshape((
-        in_channels, filters_height, filters_width, out_channels
-        )).transpose(1, 2, 0, 3)
+    filters_grads = filters_grads_mat.reshape(
+        (in_channels, filters_height, filters_width, out_channels)
+    ).transpose(1, 2, 0, 3)
     return filters_grads
 
   def _grad_func(self, in_grad_tensors):
     with self._graph.as_default_graph():
-      op, tensor_index = self._input_list[0].op, self._input_list[0].tensor_index
+      op, tensor_index = self._input_list[0].op, self._input_list[0
+                                                                 ].tensor_index
       bp_inputs = Conv2DBackpropInput(
           strides=self._strides,
           padding=self._padding,
           input_list=[
-              in_grad_tensors[0],
-              self._input_list[1],
+              in_grad_tensors[0], self._input_list[1],
               op.get_shape_tensor(tensor_index=tensor_index)
           ]
       )
@@ -595,9 +614,10 @@ class Conv2DBackpropFilter(_Filters2DBase):
     if filters_shape.shape.level > 0:
       filters_shape.shape.ndims == 1
 
-    if (inputs_shape.level > 0 and grads_shape.level > 0 and
+    if (
+        inputs_shape.level > 0 and grads_shape.level > 0 and
         inputs_shape[0] is not None and grads_shape[0] is not None
-      ):
+    ):
       assert inputs_shape[0] == grads_shape[0]
 
     if hasattr(filters_shape.op, "_value"):
@@ -611,13 +631,17 @@ class Conv2DBackpropFilter(_Filters2DBase):
     if hasattr(filters_shape.op, "_value"):
       filters_height, filters_width, in_channels, out_channels = filters_shape.op._value
 
-    if inputs_shape.level > 0 and inputs_shape[3] is not None and in_channels is None:
+    if inputs_shape.level > 0 and inputs_shape[
+        3] is not None and in_channels is None:
       in_channels = inputs_shape[3]
-    if grads_shape.level > 0 and grads_shape[3] is not None and out_channels is None:
+    if grads_shape.level > 0 and grads_shape[
+        3] is not None and out_channels is None:
       out_channels = grads_shape[3]
 
     filters_height, filters_width, in_channels, out_channels = None, None, None, None
-    return [TensorShape([filters_height, filters_width, in_channels, out_channels])]
+    return [
+        TensorShape([filters_height, filters_width, in_channels, out_channels])
+    ]
 
 
 class _Pooling2DBase(_Filters2DBase):
@@ -625,7 +649,7 @@ class _Pooling2DBase(_Filters2DBase):
 
   def __init__(
       self, strides, filters_size, padding, input_list, graph=None, name=None
-    ):
+  ):
     """Constructor.
 
     Set `np.nan` as flag of padded value when computing maximum or average.
@@ -661,10 +685,14 @@ class _Pooling2DBase(_Filters2DBase):
         num_channels = inputs_shape[3]
       if inputs_shape[1] is not None:
         height = self._compute_spatial_size(
-            inputs_shape[1], self._filters_size[0], self._strides[0], self._padding)
+            inputs_shape[1], self._filters_size[0], self._strides[0],
+            self._padding
+        )
       if inputs_shape[2] is not None:
         width = self._compute_spatial_size(
-            inputs_shape[2], self._filters_size[1], self._strides[1], self._padding)
+            inputs_shape[2], self._filters_size[1], self._strides[1],
+            self._padding
+        )
     return [TensorShape([batch_size, height, width, num_channels])]
 
 
@@ -686,17 +714,21 @@ class MaxPool2D(_Pooling2DBase):
     batch_size, in_channels = inputs.shape[0], inputs.shape[3]
 
     #[out_height*out_width*batch_size, in_channels*filters_height*filters_width]
-    inputs_mat = self._matrixize_inputs_tensor(inputs, padding, self._filters_size)
+    inputs_mat = self._matrixize_inputs_tensor(
+        inputs, padding, self._filters_size
+    )
 
     #[out_height*out_width*batch_size*in_channels, filters_height*filters_width]
-    inputs_mat = self._flat_channels_dim(inputs_mat, out_size, in_channels, self._filters_size)
+    inputs_mat = self._flat_channels_dim(
+        inputs_mat, out_size, in_channels, self._filters_size
+    )
 
     #[out_height*out_width*batch_size*in_channels]
     outputs = np.nanmax(inputs_mat, axis=1)
 
-    outputs = outputs.reshape((
-        out_size[0], out_size[1], batch_size, in_channels
-    )).transpose(2, 0, 1, 3)
+    outputs = outputs.reshape(
+        (out_size[0], out_size[1], batch_size, in_channels)
+    ).transpose(2, 0, 1, 3)
     return outputs
 
   def _grad_func(self, in_grad_tensors):
@@ -733,10 +765,14 @@ class MaxPool2DGrad(_Pooling2DBase):
     batch_size, in_channels = inputs.shape[0], inputs.shape[3]
 
     #[out_height*out_width*batch_size, in_channels*filters_height*filters_width]
-    inputs_mat = self._matrixize_inputs_tensor(inputs, padding, self._filters_size)
+    inputs_mat = self._matrixize_inputs_tensor(
+        inputs, padding, self._filters_size
+    )
 
     #[out_height*out_width*batch_size*in_channels, filters_height*filters_width]
-    inputs_mat = self._flat_channels_dim(inputs_mat, out_size, in_channels, self._filters_size)
+    inputs_mat = self._flat_channels_dim(
+        inputs_mat, out_size, in_channels, self._filters_size
+    )
 
     #[out_height*out_width*batch_size*in_channels]
     argmax = np.nanargmax(inputs_mat, axis=1)
@@ -759,17 +795,19 @@ class MaxPool2DGrad(_Pooling2DBase):
 
     # [batch_size, height, width, in_channels]
     inputs_grads = self._tensorize_grads_matrix(
-      inputs_grads_mat, inputs.shape, padding, out_size, self._filters_size)
+        inputs_grads_mat, inputs.shape, padding, out_size, self._filters_size
+    )
     return inputs_grads
 
   def _grad_func(self, in_grad_tensors):
     with self._graph.as_default_graph():
-      op, tensor_index = self._input_list[1].op, self._input_list[1].tensor_index
+      op, tensor_index = self._input_list[1].op, self._input_list[1
+                                                                 ].tensor_index
       bp_inputs = MaxPool2DGrad(
           strides=self._strides,
           filters_size=self._filters_size,
           padding=self._padding,
-          input_list= [
+          input_list=[
               self._input_list[0],
               op.get_zeros_tensor(tensor_index=tensor_index),
           ]
@@ -794,9 +832,11 @@ class MaxPool2DGrad(_Pooling2DBase):
     if grads_shape.level > 0:
       assert grads_shape.ndims == 4
 
-    if (inputs_shape.level > 0 and grads_shape.level > 0 and
+    if (
+        inputs_shape.level > 0 and grads_shape.level > 0 and
         inputs_shape[0] is not None and grads_shape[0] is not None and
-        inputs_shape[3] is not None and grads_shape[3] is not None):
+        inputs_shape[3] is not None and grads_shape[3] is not None
+    ):
       assert inputs_shape[0] == grads_shape[0]
       assert inputs_shape[3] == grads_shape[3]
 
@@ -840,23 +880,32 @@ class MaxPool2DGradGrad(_Pooling2DBase):
         out_width, in_channels], gradients w.r.t. the input argument `grads`
         of `MaxPool2DGrad`.
     """
-    out_size, padding = self._get_shapes(inputs_grads_grads.shape, self._filters_size)
+    out_size, padding = self._get_shapes(
+        inputs_grads_grads.shape, self._filters_size
+    )
     batch_size, in_channels = (
-        inputs_grads_grads.shape[0], inputs_grads_grads.shape[3])
+        inputs_grads_grads.shape[0], inputs_grads_grads.shape[3]
+    )
 
     #[out_height*out_width*batch_size, in_channels*filters_height*filters_width]
     inputs_grads_grads_mat = self._matrixize_inputs_tensor(
-        inputs_grads_grads, padding, self._filters_size)
+        inputs_grads_grads, padding, self._filters_size
+    )
 
     #[out_height*out_width*batch_size*in_channels, filters_height*filters_width]
     inputs_grads_grads_mat = self._flat_channels_dim(
-        inputs_grads_grads_mat, out_size, in_channels, self._filters_size)
+        inputs_grads_grads_mat, out_size, in_channels, self._filters_size
+    )
 
     #[out_height*out_width*batch_size, in_channels*filters_height*filters_width]
-    inputs_mat = self._matrixize_inputs_tensor(inputs, padding, self._filters_size)
+    inputs_mat = self._matrixize_inputs_tensor(
+        inputs, padding, self._filters_size
+    )
 
     #[out_height*out_width*batch_size*in_channels, filters_height*filters_width]
-    inputs_mat = self._flat_channels_dim(inputs_mat, out_size, in_channels, self._filters_size)
+    inputs_mat = self._flat_channels_dim(
+        inputs_mat, out_size, in_channels, self._filters_size
+    )
 
     #[out_height*out_width*batch_size*in_channels]
     argmax = np.nanargmax(inputs_mat, axis=1)
@@ -869,7 +918,6 @@ class MaxPool2DGradGrad(_Pooling2DBase):
         out_size[0], out_size[1], batch_size, in_channels
     ).transpose(2, 0, 1, 3)
     return grads_grads
-
 
   def _grad_func(self, in_grad_tensors):
     with self._graph.as_default_graph():
@@ -912,10 +960,12 @@ class MaxPool2DGradGrad(_Pooling2DBase):
           num_channels = shape[3]
         if height is None and shape[1] is not None:
           height = self._compute_spatial_size(
-              shape[1], self._filters_size[0], self._strides[0], self._padding)
+              shape[1], self._filters_size[0], self._strides[0], self._padding
+          )
         if width is None and shape[2] is not None:
           width = self._compute_spatial_size(
-              shape[2], self._filters_size[1], self._strides[1], self._padding)
+              shape[2], self._filters_size[1], self._strides[1], self._padding
+          )
     return [TensorShape([batch_size, height, width, num_channels])]
 
 
@@ -937,22 +987,27 @@ class AvgPool2D(_Pooling2DBase):
     batch_size, in_channels = inputs.shape[0], inputs.shape[3]
 
     #[out_height*out_width*batch_size, in_channels*filters_height*filters_width]
-    inputs_mat = self._matrixize_inputs_tensor(inputs, padding, self._filters_size)
+    inputs_mat = self._matrixize_inputs_tensor(
+        inputs, padding, self._filters_size
+    )
 
     #[out_height*out_width*batch_size*in_channels, filters_height*filters_width]
-    inputs_mat = self._flat_channels_dim(inputs_mat, out_size, in_channels, self._filters_size)
+    inputs_mat = self._flat_channels_dim(
+        inputs_mat, out_size, in_channels, self._filters_size
+    )
 
     #[out_height*out_width*batch_size*in_channels]
     outputs = np.nanmean(inputs_mat, axis=1)
 
-    outputs = outputs.reshape((
-        out_size[0], out_size[1], batch_size, in_channels
-    )).transpose(2, 0, 1, 3)
+    outputs = outputs.reshape(
+        (out_size[0], out_size[1], batch_size, in_channels)
+    ).transpose(2, 0, 1, 3)
     return outputs
 
   def _grad_func(self, in_grad_tensors):
     with self._graph.as_default_graph():
-      op, tensor_index = self._input_list[0].op, self._input_list[0].tensor_index
+      op, tensor_index = self._input_list[0].op, self._input_list[0
+                                                                 ].tensor_index
       bp_inputs = AvgPool2DGrad(
           strides=self._strides,
           filters_size=self._filters_size,
@@ -992,9 +1047,9 @@ class AvgPool2DGrad(_Pooling2DBase):
     strides_height, strides_width = self._strides
     filters_height, filters_width = self._filters_size
     h_col_indices = np.arange(
-        0, pad_height - filters_height + 1, strides_height)
-    w_col_indices = np.arange(
-        0, pad_width - filters_width + 1, strides_width)
+        0, pad_height - filters_height + 1, strides_height
+    )
+    w_col_indices = np.arange(0, pad_width - filters_width + 1, strides_width)
     w_grid, h_grid = np.meshgrid(w_col_indices, h_col_indices)
 
     def _func(indices):
@@ -1004,8 +1059,8 @@ class AvgPool2DGrad(_Pooling2DBase):
         if h + filters_height <= padding[0]:
           patch_height = 0
         else:
-          patch_height = min(h + filters_height, inputs_shape[1] + padding[0]
-              ) - padding[0]
+          patch_height = min(h + filters_height,
+                             inputs_shape[1] + padding[0]) - padding[0]
       else:
         patch_height = min(filters_height, inputs_shape[1] + padding[0] - h)
 
@@ -1013,8 +1068,8 @@ class AvgPool2DGrad(_Pooling2DBase):
         if w + filters_width <= padding[2]:
           patch_width = 0
         else:
-          patch_width = min(w + filters_width, inputs_shape[2] + padding[2]
-              ) - padding[2]
+          patch_width = min(w + filters_width,
+                            inputs_shape[2] + padding[2]) - padding[2]
       else:
         patch_width = min(filters_width, inputs_shape[2] + padding[2] - w)
       return patch_height * patch_width
@@ -1029,7 +1084,8 @@ class AvgPool2DGrad(_Pooling2DBase):
     ind_mat = np.ones((
         out_size[0] * out_size[1],
         batch_size * in_channels * filters_height * filters_width
-    ), dtype="float32") / divisor
+    ),
+                      dtype="float32") / divisor
 
     #[out_height*out_width*batch_size*in_channels, filters_height*filters_width]
     ind_mat = ind_mat.reshape(
@@ -1050,7 +1106,8 @@ class AvgPool2DGrad(_Pooling2DBase):
 
     #[batch_size, height, width, in_channels]
     inputs_grads = self._tensorize_grads_matrix(
-      inputs_grads_mat, inputs_shape, padding, out_size, self._filters_size)
+        inputs_grads_mat, inputs_shape, padding, out_size, self._filters_size
+    )
     return inputs_grads
 
   def _grad_func(self, in_grad_tensors):
@@ -1078,10 +1135,10 @@ class AvgPool2DGrad(_Pooling2DBase):
     if inputs_shape.shape.level > 0:
       assert inputs_shape.shape.ndims == 1
 
-    if (grads_shape.level > 0 and
-        hasattr(inputs_shape.op, "_value") and
-        grads_shape[0] is not None and
-        grads_shape[3] is not None):
+    if (
+        grads_shape.level > 0 and hasattr(inputs_shape.op, "_value") and
+        grads_shape[0] is not None and grads_shape[3] is not None
+    ):
       assert grads_shape[0] == inputs_shape.op._value[0]
       assert grads_shape[3] == inputs_shape.op._value[3]
 
@@ -1105,20 +1162,20 @@ class AvgPool2DGrad(_Pooling2DBase):
 
 
 class Sigmoid(Operation, _ShapeAsIs):
+
   def _run(self, inputs):
     outputs = 1 / (1 + np.exp(-inputs))
     return outputs
 
   def _grad_func(self, in_grad_tensors):
     with self._graph.as_default_graph():
-      bp_inputs = SigmoidGrad(
-          input_list=[self.output(0), in_grad_tensors[0]]
-      )
+      bp_inputs = SigmoidGrad(input_list=[self.output(0), in_grad_tensors[0]])
       out_grad_tensors = [bp_inputs.output(0)]
     return out_grad_tensors
 
 
 class SigmoidGrad(Operation, _PickFirstAmongCompatibleShapes):
+
   def _run(self, outputs, grads):
     outputs_inputs_grads = outputs * (1 - outputs) * grads
     return outputs_inputs_grads
@@ -1132,12 +1189,14 @@ class SigmoidGrad(Operation, _PickFirstAmongCompatibleShapes):
           input_list=[
               Const(value=np.asarray(2, dtype="float32")).output(0),
               mul.output(0)
-        ]
+          ]
       )
       mul2 = Mul(input_list=[self._input_list[0], mul1.output(0)])
       bp_outputs = Sub(input_list=[mul.output(0), mul2.output(0)])
 
-      bp_grads = SigmoidGrad(input_list=[self._input_list[0], in_grad_tensors[0]])
+      bp_grads = SigmoidGrad(
+          input_list=[self._input_list[0], in_grad_tensors[0]]
+      )
     out_grad_tensors = [bp_outputs.output(0), bp_grads.output(0)]
     return out_grad_tensors
 
@@ -1146,6 +1205,7 @@ class SigmoidGrad(Operation, _PickFirstAmongCompatibleShapes):
 
 
 class Tanh(Operation, _ShapeAsIs):
+
   def _run(self, inputs):
     outputs = np.tanh(inputs)
     return outputs
@@ -1158,6 +1218,7 @@ class Tanh(Operation, _ShapeAsIs):
 
 
 class TanhGrad(Operation, _PickFirstAmongCompatibleShapes):
+
   def _run(self, outputs, grads):
     outputs_inputs_grads = (1 - outputs * outputs) * grads
     return outputs_inputs_grads
@@ -1180,6 +1241,7 @@ class TanhGrad(Operation, _PickFirstAmongCompatibleShapes):
 
 
 class Relu(Operation, _ShapeAsIs):
+
   def _run(self, inputs):
     outputs = np.maximum(0, inputs)
     return outputs
@@ -1192,15 +1254,20 @@ class Relu(Operation, _ShapeAsIs):
 
 
 class ReluGrad(Operation, _PickFirstAmongCompatibleShapes):
+
   def _run(self, outputs, grads):
     outputs_inputs_grads = np.where(outputs <= 0, 0, grads)
     return outputs_inputs_grads
 
   def _grad_func(self, in_grad_tensors):
     with self._graph.as_default_graph():
-      op, tensor_index = self._input_list[0].op, self._input_list[0].tensor_index
+      op, tensor_index = self._input_list[0].op, self._input_list[0
+                                                                 ].tensor_index
       bp_grads = ReluGrad(input_list=[self._input_list[0], in_grad_tensors[0]])
-      out_grad_tensors = [op.get_zeros_tensor(tensor_index=tensor_index), bp_grads.output(0)]
+      out_grad_tensors = [
+          op.get_zeros_tensor(tensor_index=tensor_index),
+          bp_grads.output(0)
+      ]
     return out_grad_tensors
 
 
@@ -1220,10 +1287,12 @@ class SoftmaxCrossEntropyWithLogits(Operation):
       softmax = Softmax(input_list=[self._input_list[0]])
       log_softmax = LogSoftmax(input_list=[self._input_list[0]])
       sub = Sub(input_list=[softmax.output(0), self._input_list[1]])
-      ed = ExpandDims(input_list=[
-          in_grad_tensors[0],
-          Const(value=np.asarray(-1, dtype="int32")).output(0)
-        ])
+      ed = ExpandDims(
+          input_list=[
+              in_grad_tensors[0],
+              Const(value=np.asarray(-1, dtype="int32")).output(0)
+          ]
+      )
       neg = Neg(input_list=[log_softmax.output(0)])
       bp_labels = Mul(input_list=[neg.output(0), ed.output(0)])
       bp_logits = Mul(input_list=[sub.output(0), ed.output(0)])
@@ -1279,6 +1348,7 @@ class LogSoftmax(Operation, _ShapeAsIs):
 
 
 class Softmax(Operation, _ShapeAsIs):
+
   def _run(self, inputs):
     logits = np.exp(inputs - np.max(inputs))
     softmax = logits / np.sum(logits, axis=-1, keepdims=True)
@@ -1303,10 +1373,12 @@ class Softmax(Operation, _ShapeAsIs):
 
 
 class LeakyRelu(Operation, _ShapeAsIs):
+
   def __init__(self, input_list, alpha=0.2, graph=None, name=None):
     self._alpha = alpha
     super(LeakyRelu, self).__init__(
-        graph=graph, input_list=input_list, name=name)
+        graph=graph, input_list=input_list, name=name
+    )
 
   def _run(self, inputs):
     outputs = np.where(inputs >= 0, inputs, inputs * self._alpha)
@@ -1314,16 +1386,21 @@ class LeakyRelu(Operation, _ShapeAsIs):
 
   def _grad_func(self, in_grad_tensors):
     with self._graph.as_default_graph():
-      bp_inputs = LeakyReluGrad(alpha=self._alpha, input_list=[self._input_list[0], in_grad_tensors[0]])
+      bp_inputs = LeakyReluGrad(
+          alpha=self._alpha,
+          input_list=[self._input_list[0], in_grad_tensors[0]]
+      )
       out_grad_tensors = [bp_inputs.output(0)]
     return out_grad_tensors
 
 
 class LeakyReluGrad(Operation, _PickFirstAmongCompatibleShapes):
+
   def __init__(self, input_list, alpha=0.2, graph=None, name=None):
     self._alpha = alpha
     super(LeakyReluGrad, self).__init__(
-        graph=graph, input_list=input_list, name=name)
+        graph=graph, input_list=input_list, name=name
+    )
 
   def _run(self, inputs, grads):
     outputs_inputs_grads = np.where(inputs <= 0, self._alpha * grads, grads)
@@ -1334,6 +1411,9 @@ class LeakyReluGrad(Operation, _PickFirstAmongCompatibleShapes):
 
     with self._graph.as_default_graph():
       bp_inputs = ZerosLike(input_list=[self._input_list[0]])
-      bp_grads = LeakyReluGrad(input_list=[self._input_list[0], in_grad_tensors[0]], alpha=self._alpha)
+      bp_grads = LeakyReluGrad(
+          input_list=[self._input_list[0], in_grad_tensors[0]],
+          alpha=self._alpha
+      )
       out_grad_tensors = [bp_inputs.output(0), bp_grads.output(0)]
     return out_grad_tensors

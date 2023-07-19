@@ -2,6 +2,7 @@ import numpy as np
 
 
 class TensorShape(object):
+
   def __init__(self, raw_shape):
     if raw_shape is None:
       self._raw_shape = None
@@ -21,7 +22,7 @@ class TensorShape(object):
   @property
   def level(self):
     if self.ndims is None:
-      return 0  
+      return 0
     elif all([s is not None for s in self.raw_shape]):
       return 2
     else:
@@ -44,13 +45,13 @@ class TensorShape(object):
       return 'TensorShape([%s])' % ', '.join(map(str, self._raw_shape))
 
   def _compatible_with(self, tensor_shape):
-    """Checks if the `TensorShape` is compatible with another shape. Example: 
+    """Checks if the `TensorShape` is compatible with another shape. Example:
 
     `Shape(None, 1, 2, 3)` is compatible with `Shape(1, 1, 2, 3)`, while not
-    compatible with `Shape(1, 2, 2, 3)`. 
+    compatible with `Shape(1, 2, 2, 3)`.
 
     Args:
-      tensor_shape: raw shape, i.e. a list (or tuple) of integers (or None), 
+      tensor_shape: raw shape, i.e. a list (or tuple) of integers (or None),
         or a `TensorShape` instance.
     """
     if self.ndims is None or tensor_shape.ndims is None:
@@ -59,13 +60,19 @@ class TensorShape(object):
     if self.ndims != tensor_shape.ndims:
       return False
 
-    return all([d1 is None or d2 is None or d1 == d2 for d1, d2 in zip(self.raw_shape, tensor_shape.raw_shape)])
+    return all([
+        d1 is None or d2 is None or d1 == d2
+        for d1, d2 in zip(self.raw_shape, tensor_shape.raw_shape)
+    ])
 
   def _broadcastable_with(self, tensor_shape):
     if self.ndims is None or tensor_shape.ndims is None or self.ndims == 0 or tensor_shape.ndims == 0:
       return True
 
-    return all([d1 is None or d2 is None or d1 == 1 or d2 == 1 or d1 == d2 for d1, d2 in zip(self.raw_shape[::-1], tensor_shape.raw_shape[::-1])]) 
+    return all([
+        d1 is None or d2 is None or d1 == 1 or d2 == 1 or d1 == d2
+        for d1, d2 in zip(self.raw_shape[::-1], tensor_shape.raw_shape[::-1])
+    ])
 
   def _merge(self, tensor_shape, skip=[]):
 
@@ -80,7 +87,9 @@ class TensorShape(object):
             raw_shape[i] = tensor_shape._raw_shape[i]
         self._raw_shape = tuple(raw_shape)
     else:
-      raise ValueError(f"Attempting to merge incompatible shapes: {self}, {tensor_shape}")
+      raise ValueError(
+          f"Attempting to merge incompatible shapes: {self}, {tensor_shape}"
+      )
 
   def _diff_at(self, tensor_shape):
     axes = []

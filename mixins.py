@@ -4,9 +4,12 @@ from .tensor_shape import TensorShape
 
 
 class _BinaryOp(object):
+
   def _compute_shapes(self):
     # validation
-    assert self._input_list[0].shape._broadcastable_with(self._input_list[1].shape)
+    assert self._input_list[0].shape._broadcastable_with(
+        self._input_list[1].shape
+    )
 
     # compute shapes
     x_shape = self._input_list[0].shape
@@ -33,8 +36,10 @@ class _BinaryOp(object):
         elif dim_y == 1:
           shape.append(dim_x)
         else:
-          raise ValueError('operands x(%s) and y(%s) have incompatible shapes for '
-              'broadcasting.' % (x_shape, y_shape))
+          raise ValueError(
+              'operands x(%s) and y(%s) have incompatible shapes for '
+              'broadcasting.' % (x_shape, y_shape)
+          )
       elif dim_x is not None:
         shape.append(None if dim_x == 1 else dim_x)
       elif dim_y is not None:
@@ -49,8 +54,12 @@ class _BinaryOp(object):
 
 
 class _ReductionOp(object):
+
   def _compute_shapes(self):
-    if not (self._input_list[0].shape.level > 0 and hasattr(self._input_list[1].op, "_value")):
+    if not (
+        self._input_list[0].shape.level > 0 and
+        hasattr(self._input_list[1].op, "_value")
+    ):
       return [TensorShape(None)]
     else:
       raw_shape = []
@@ -66,16 +75,24 @@ class _ReductionOp(object):
 
 
 class _ShapeAsIs(object):
+
   def _compute_shapes(self):
-    return [TensorShape(None if tensor.shape.raw_shape is None else list(tensor.shape.raw_shape)) for tensor in self._input_list]
+    return [
+        TensorShape(
+            None if tensor.shape.raw_shape is
+            None else list(tensor.shape.raw_shape)
+        ) for tensor in self._input_list
+    ]
 
 
 class _ScalarShape(object):
+
   def _compute_shapes(self):
     return [TensorShape([])]
 
 
 class _PickFirstAmongCompatibleShapes(object):
+
   def _compute_shapes(self):
     # validation
     for tensor in self._input_list[1:]:
@@ -88,22 +105,24 @@ class _PickFirstAmongCompatibleShapes(object):
     return [shape]
 
 
-def _compute_static_spatial_dim_size(input_size, kernel_size, stride_size, padding):
+def _compute_static_spatial_dim_size(
+    input_size, kernel_size, stride_size, padding
+):
   if input_size is None:
     out_size = None
   else:
     if padding == "SAME":
       out_size = input_size * stride_size
-    else: # padding == 'VALID'
+    else:  # padding == 'VALID'
       if kernel_size is None:
         out_size = None
       else:
-        out_size = input_size * stride_size + max(
-            kernel_size - stride_size, 0)
+        out_size = input_size * stride_size + max(kernel_size - stride_size, 0)
   return out_size
 
 
 class _TensorShapeAsInput(object):
+
   def _compute_shapes(self):
     # validation
     if hasattr(self._input_list[0].op, "_value"):

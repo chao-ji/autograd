@@ -4,6 +4,7 @@ import numpy as np
 class Tensor(object):
   """Immutable tensor
   """
+
   def __init__(self, op, tensor_index, shape):
     from .operation import Operation
     if not isinstance(op, Operation):
@@ -43,8 +44,7 @@ class Tensor(object):
       try:
         other = Const(value=np.asarray(other)).output(0)
       except Exception:
-        raise TypeError(
-            'other must be a Tensor or convertable to numpy array.')
+        raise TypeError('other must be a Tensor or convertable to numpy array.')
     return other
 
   def __add__(self, other):
@@ -132,7 +132,9 @@ class Tensor(object):
 
       elif isinstance(ss, slice):
         begin.append(0 if ss.start is None else ss.start)
-        end.append(orig_shape[index - new_axis_count] if ss.stop is None else ss.stop)
+        end.append(
+            orig_shape[index - new_axis_count] if ss.stop is None else ss.stop
+        )
         strides.append(1 if ss.step is None else ss.step)
         new_shape.append(orig_shape[index - new_axis_count])
 
@@ -143,13 +145,16 @@ class Tensor(object):
         new_shape.append(1)
         new_axis_count += 1
       elif ss is Ellipsis:
-        raise NotImplementedError("Ellipsis is currently not supported for slicing.")
+        raise NotImplementedError(
+            "Ellipsis is currently not supported for slicing."
+        )
 
     pad_size = len(orig_shape) - (index + 1 - new_axis_count)
     begin = begin + [0] * pad_size
-    end = end + orig_shape[index + 1 - new_axis_count: len(orig_shape)]
+    end = end + orig_shape[index + 1 - new_axis_count:len(orig_shape)]
     strides = strides + [1] * pad_size
-    new_shape = new_shape + orig_shape[index + 1 - new_axis_count: len(orig_shape)]
+    new_shape = new_shape + orig_shape[index + 1 -
+                                       new_axis_count:len(orig_shape)]
 
     new_shape = _build_vector_from_mixed(new_shape)
 
@@ -178,14 +183,20 @@ class Tensor(object):
     from .generic_ops import OnesLike
 
     if dy_tensor is None:
-      dy_tensors = [OnesLike(input_list=[y_tensor]).output(0) for y_tensor in self.op._outputs]
+      dy_tensors = [
+          OnesLike(input_list=[y_tensor]).output(0)
+          for y_tensor in self.op._outputs
+      ]
     else:
       dy_tensors = []
       for i, y_tensor in enumerate(self.op._outputs):
         if i == self.tensor_index:
           dy_tensors.append(dy_tensor)
         else:
-          dy_tensors.append(OnesLike(input_list=[y_tensor]).output(0) for y_tensor in self.op._outputs)
+          dy_tensors.append(
+              OnesLike(input_list=[y_tensor]).output(0)
+              for y_tensor in self.op._outputs
+          )
 
     dx_tensors = self.op.backprop(x_tensors, dy_tensors)
     return dx_tensors
@@ -198,6 +209,9 @@ def _build_vector_from_mixed(mixed):
   if not any([isinstance(i, Tensor) for i in mixed]):
     vector = Const(value=np.asarray(mixed)).output(0)
   else:
-    tensorized = [i if isinstance(i, Tensor) else Const(value=np.asarray(i)).output(0) for i in mixed]
+    tensorized = [
+        i if isinstance(i, Tensor) else Const(value=np.asarray(i)).output(0)
+        for i in mixed
+    ]
     vector = Pack(input_list=tensorized, axis=0).output(0)
   return vector

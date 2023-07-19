@@ -19,11 +19,10 @@ class DynamicStitch(Operation):
     size = len(inputs_list) // 2
     indices, data = inputs_list[:size], inputs_list[size:]
 
-    data = np.concatenate(
-        [data[i].reshape((-1,) + data[i].shape[indices[i].ndim:])
-            for i in range(len(data))
-        ]
-    )
+    data = np.concatenate([
+        data[i].reshape((-1,) + data[i].shape[indices[i].ndim:])
+        for i in range(len(data))
+    ])
     indices = np.concatenate([indices[i].ravel() for i in range(len(indices))])
 
     outputs = np.zeros((indices.max() + 1,) + data.shape[1:], dtype="float32")
@@ -40,8 +39,13 @@ class DynamicStitch(Operation):
       out_grad_tensors = []
       for i, (indices, params) in enumerate(
           zip(self._input_list[:size], in_grad_tensors * size)
-        ):
-        bp_data = Gather(input_list=[params, indices, Const(value=np.asarray(0, dtype="int32")).output(0)])
+      ):
+        bp_data = Gather(
+            input_list=[
+                params, indices,
+                Const(value=np.asarray(0, dtype="int32")).output(0)
+            ]
+        )
         out_grad_tensors.append(bp_data.output(0))
 
     return out_grad_tensors
@@ -83,6 +87,7 @@ class DynamicStitch(Operation):
 
 
 class Gather(Operation):
+
   def _run(self, params, indices, axis):
     outputs = np.take(params, indices, axis=axis.item())
     return outputs
@@ -99,38 +104,36 @@ class Gather(Operation):
       one_scalar_tensor = Const(value=np.asarray(1, dtype="int32")).output(0)
 
       op, tensor_index = (
-          self._input_list[0].op,
-          self._input_list[0].tensor_index
+          self._input_list[0].op, self._input_list[0].tensor_index
       )
       mod_tensor = FloorMod(
           input_list=[
               self._input_list[2],
               op.get_rank_tensor(tensor_index=tensor_index)
-          ]).output(0)
+          ]
+      ).output(0)
       op, tensor_index = in_grad_tensors[0].op, in_grad_tensors[0].tensor_index
       range0 = Range(
           input_list=[
               mod_tensor,
-              op.get_rank_tensor(tensor_index=tensor_index),
-              one_scalar_tensor
+              op.get_rank_tensor(tensor_index=tensor_index), one_scalar_tensor
           ]
       )
       range1 = Range(
+          input_list=[zero_scalar_tensor, mod_tensor, one_scalar_tensor]
+      )
+      perm = Concat(
           input_list=[
               zero_scalar_tensor,
-              mod_tensor,
-              one_scalar_tensor
+              range0.output(0),
+              range1.output(0),
           ]
       )
-      perm = Concat(input_list=[
-          zero_scalar_tensor,
-          range0.output(0),
-          range1.output(0),
-        ])
       transpose = Transpose(input_list=[in_grad_tensors[0], perm.output(0)])
       ds = DynamicStitch(
           accumulate=True,
-          input_list=[self._input_list[1], transpose.output(0)]
+          input_list=[self._input_list[1],
+                      transpose.output(0)]
       )
 
       rank_tensor = ds.get_rank_tensor(tensor_index=0)
@@ -140,68 +143,59 @@ class Gather(Operation):
           input_list=[zero_scalar_tensor, sub_tensor, one_scalar_tensor]
       )
 
-      perm1 = Concat(input_list=[
-          zero_scalar_tensor,
-          range2.output(0),
-          range3.output(0),
-        ])
+      perm1 = Concat(
+          input_list=[
+              zero_scalar_tensor,
+              range2.output(0),
+              range3.output(0),
+          ]
+      )
 
       transpose1 = Transpose(input_list=[ds.output(0), perm1.output(0)])
 
       shape_tensor = transpose1.get_shape_tensor(tensor_index=0)
-      ed_tensor = ExpandDims(
-              input_list=[
-                  mod_tensor,
-                  zero_scalar_tensor
-              ]
-          ).output(0)
+      ed_tensor = ExpandDims(input_list=[mod_tensor, zero_scalar_tensor]
+                            ).output(0)
 
-      slice0 = Slice(input_list=[
-          shape_tensor,
-          ed_tensor,
-          one_array_tensor
-        ])
+      slice0 = Slice(input_list=[shape_tensor, ed_tensor, one_array_tensor])
 
-      op, tensor_index = self._input_list[0].op, self._input_list[0].tensor_index
-      slice1 = Slice(input_list=[
-          op.get_shape_tensor(tensor_index=tensor_index),
-          ed_tensor,
-          one_array_tensor
-          ])
+      op, tensor_index = self._input_list[0].op, self._input_list[0
+                                                                 ].tensor_index
+      slice1 = Slice(
+          input_list=[
+              op.get_shape_tensor(tensor_index=tensor_index), ed_tensor,
+              one_array_tensor
+          ]
+      )
 
       sub = Sub(input_list=[slice1.output(0), slice0.output(0)])
 
-      slice2 = Slice(input_list=[
-          shape_tensor,
-          zero_array_tensor,
-          ed_tensor
-        ])
+      slice2 = Slice(input_list=[shape_tensor, zero_array_tensor, ed_tensor])
 
-      slice3 = Slice(input_list=[
-          shape_tensor,
-          Add(input_list=[ed_tensor, one_array_tensor]).output(0),
-          Const(value=np.asarray([-1], dtype="int32")).output(0)
-        ])
-
-      concat = Concat(input_list=[
-          zero_scalar_tensor,
-          slice2.output(0),
-          sub.output(0),
-          slice3.output(0)
-        ])
-
-      fill = Fill(input_list=[
-          concat.output(0),
-          zero_scalar_tensor
-        ]
+      slice3 = Slice(
+          input_list=[
+              shape_tensor,
+              Add(input_list=[ed_tensor, one_array_tensor]).output(0),
+              Const(value=np.asarray([-1], dtype="int32")).output(0)
+          ]
       )
 
-      concat1 = Concat(input_list=[
-          mod_tensor,
-          transpose1.output(0),
-          fill.output(0)]
+      concat = Concat(
+          input_list=[
+              zero_scalar_tensor,
+              slice2.output(0),
+              sub.output(0),
+              slice3.output(0)
+          ]
       )
 
+      fill = Fill(input_list=[concat.output(0), zero_scalar_tensor])
+
+      concat1 = Concat(
+          input_list=[mod_tensor,
+                      transpose1.output(0),
+                      fill.output(0)]
+      )
 
       out_grad_tensors = [concat1.output(0)]
     return out_grad_tensors
@@ -215,29 +209,37 @@ class Gather(Operation):
       assert self._input_list[2].shape.ndims == 0
 
     # compute shapes
-    if self._input_list[0].shape.level > 0 and self._input_list[1].shape.level > 0:
-      if (self._input_list[0].shape.level == 2 and
+    if self._input_list[0].shape.level > 0 and self._input_list[
+        1].shape.level > 0:
+      if (
+          self._input_list[0].shape.level == 2 and
           self._input_list[1].shape.level == 2 and
           hasattr(self._input_list[2].op, "_value")
-        ):
+      ):
         axis = self._input_list[2].op._value.item()
         params_shape = list(self._input_list[0].shape.raw_shape)
         indices_shape = list(self._input_list[1].shape.raw_shape)
 
-        raw_shape = params_shape[:axis] + indices_shape + params_shape[axis+1:]
+        raw_shape = params_shape[:axis] + indices_shape + params_shape[axis +
+                                                                       1:]
         return [TensorShape(raw_shape)]
       else:
-        return [TensorShape([None] * (self._input_list[0].shape.ndims + self._input_list[1].shape.ndims - 1))]
+        return [
+            TensorShape([None] * (
+                self._input_list[0].shape.ndims +
+                self._input_list[1].shape.ndims - 1
+            ))
+        ]
     else:
       return [TensorShape(None)]
 
 
 class BroadcastTo(Operation):
   """"""
+
   def _run(self, inputs, target_shape):
     shape = np.pad(
-        inputs.shape,
-        [len(target_shape) - len(inputs.shape), 0],
+        inputs.shape, [len(target_shape) - len(inputs.shape), 0],
         constant_values=1
     )
     multiples = np.where(shape != target_shape, target_shape, 1)
@@ -249,13 +251,12 @@ class BroadcastTo(Operation):
     from .math_ops import BroadcastGradientArgs, Sum
 
     with self._graph.as_default_graph():
-      op, tensor_index = self._input_list[0].op, self._input_list[0].tensor_index
+      op, tensor_index = self._input_list[0].op, self._input_list[0
+                                                                 ].tensor_index
       shape_tensor = op.get_shape_tensor(tensor_index=tensor_index)
 
       bga = BroadcastGradientArgs(
-          input_list=[shape_tensor,
-                      self._input_list[1]
-          ],
+          input_list=[shape_tensor, self._input_list[1]],
       )
       sum0 = Sum(input_list=[in_grad_tensors[0], bga.output(0)])
 
@@ -273,7 +274,10 @@ class BroadcastTo(Operation):
       target_shape = self._input_list[1].op._value
       assert target_shape.ndim == 1 and (target_shape > 0).all()
       if self._input_list[0].shape.level > 0:
-        assert all([x is None or x == 1 or x == y for x, y in zip(self._input_list[0].shape[::-1], target_shape[::-1])])
+        assert all([
+            x is None or x == 1 or x == y for x, y in
+            zip(self._input_list[0].shape[::-1], target_shape[::-1])
+        ])
 
     if self._input_list[1].shape.level > 0:
       assert self._input_list[1].shape.ndims == 1
@@ -313,8 +317,7 @@ class Select(Operation):
       shape2_tensor = self.get_shape_tensor(tensor_index=0)
       select = Select(
           input_list=[
-              self._input_list[0],
-              in_grad_tensors[0],
+              self._input_list[0], in_grad_tensors[0],
               Const(value=np.asarray(0, dtype="float32")).output(0)
           ]
       )
@@ -343,9 +346,11 @@ class Select(Operation):
     x_shape = self._input_list[1].shape
     y_shape = self._input_list[2].shape
 
-    assert (c_shape._broadcastable_with(x_shape) and
+    assert (
+        c_shape._broadcastable_with(x_shape) and
         c_shape._broadcastable_with(y_shape) and
-        x_shape._broadcastable_with(y_shape))
+        x_shape._broadcastable_with(y_shape)
+    )
 
     # compute shapes
     if c_shape.level > 0 and x_shape.level > 0 and y_shape.level > 0:
@@ -372,12 +377,14 @@ class Select(Operation):
 
 
 class StopGradient(Operation, _ShapeAsIs):
+
   def _run(self, inputs):
     outputs = inputs
     return outputs
 
 
 class Identity(Operation, _ShapeAsIs):
+
   def _run(self, inputs):
     outputs = inputs
     return outputs

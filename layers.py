@@ -3,10 +3,11 @@ from collections import namedtuple
 import numpy as np
 
 from .generic_ops import Const
-from .initializers import (GlorotNormalInitializer, GlorotUniformInitializer,
-                           HeNormalInitializer, HeUniformInitializer,
-                           OnesInitializer, RandomUniformInitializer,
-                           TruncatedNormalInitializer, ZerosInitializer)
+from .initializers import (
+    GlorotNormalInitializer, GlorotUniformInitializer, HeNormalInitializer,
+    HeUniformInitializer, OnesInitializer, RandomUniformInitializer,
+    TruncatedNormalInitializer, ZerosInitializer
+)
 from .math_ops import Add
 from .nn_ops import LeakyRelu, Relu, Sigmoid, Tanh
 from .resource_ops import AddToVariable, CreateVariable, ReadVariable
@@ -29,12 +30,11 @@ INITIALIZERS = {
     "he_normal": HeNormalInitializer,
 }
 
-
 Variable = namedtuple("Variable", ["weight", "handle", "trainable"])
 
 
-
 class Layer(object):
+
   def __init__(self):
     self._variables = []
 
@@ -48,15 +48,14 @@ class Layer(object):
 
   def get_variable_weight(self, index):
     runtime = self._variables[index].weight.op._graph._runtime
-    return runtime.get_variable_value(runtime.get_tensor_value(self._variables[index].handle).item().id)
+    return runtime.get_variable_value(
+        runtime.get_tensor_value(self._variables[index].handle).item().id
+    )
 
   def _build(self, shape_list, init_fn_list, flag_list, trainable_list):
     for shape, init_fn, flag, trainable in zip(
-        shape_list,
-        init_fn_list,
-        flag_list,
-        trainable_list
-      ):
+        shape_list, init_fn_list, flag_list, trainable_list
+    ):
       if not flag:
         continue
 
@@ -69,14 +68,13 @@ class Layer(object):
 
       self._variables.append(
           Variable(
-              weight=read_var,
-              handle=create_var.output(0),
-              trainable=trainable
+              weight=read_var, handle=create_var.output(0), trainable=trainable
           )
       )
 
 
 class Dense(Layer):
+
   def __init__(
       self,
       units,
@@ -85,12 +83,14 @@ class Dense(Layer):
       kernel_initializer="glorot_uniform",
       bias_initializer="zeros",
       kernel_init_params={},
-    ):
+  ):
     super(Dense, self).__init__()
     self._units = units
     self._activation = activation
     self._use_bias = use_bias
-    self._kernel_initializer = INITIALIZERS[kernel_initializer](**kernel_init_params)
+    self._kernel_initializer = INITIALIZERS[kernel_initializer](
+        **kernel_init_params
+    )
     self._bias_initializer = INITIALIZERS[bias_initializer]()
 
   def build(self, input_shape):
@@ -122,6 +122,7 @@ class Dense(Layer):
 
 
 class Conv2D(Layer):
+
   def __init__(
       self,
       filters,
@@ -133,7 +134,7 @@ class Conv2D(Layer):
       kernel_initializer="glorot_uniform",
       bias_initializer="zeros",
       kernel_init_params={},
-    ):
+  ):
     super(Conv2D, self).__init__()
     self._filters = filters
     self._kernel_size = kernel_size
@@ -141,7 +142,9 @@ class Conv2D(Layer):
     self._padding = padding
     self._activation = activation
     self._use_bias = use_bias
-    self._kernel_initializer = INITIALIZERS[kernel_initializer](**kernel_init_params)
+    self._kernel_initializer = INITIALIZERS[kernel_initializer](
+        **kernel_init_params
+    )
     self._bias_initializer = INITIALIZERS[bias_initializer]()
 
   def build(self, input_shape):
@@ -149,7 +152,10 @@ class Conv2D(Layer):
       filters_shape = list(self._kernel_size) + [input_shape[3], self._filters]
 
       shape_list = [filters_shape, [self._filters]]
-      init_fn_list = [lambda shape: self._kernel_initializer(shape), lambda shape: self._bias_initializer(shape)]
+      init_fn_list = [
+          lambda shape: self._kernel_initializer(shape),
+          lambda shape: self._bias_initializer(shape)
+      ]
       flag_list = [True, self._use_bias]
       trainable_list = [True] * 2
       self._build(shape_list, init_fn_list, flag_list, trainable_list)
@@ -173,6 +179,7 @@ class Conv2D(Layer):
 
 
 class Conv2DTranspose(Layer):
+
   def __init__(
       self,
       filters,
@@ -185,7 +192,7 @@ class Conv2DTranspose(Layer):
       kernel_initializer="glorot_uniform",
       bias_initializer="zeros",
       kernel_init_params={},
-    ):
+  ):
     super(Conv2DTranspose, self).__init__()
     self._filters = filters
     self._kernel_size = kernel_size
@@ -194,7 +201,9 @@ class Conv2DTranspose(Layer):
     self._activation = activation
     self._use_bias = use_bias
     self._outputs_shape = outputs_shape
-    self._kernel_initializer = INITIALIZERS[kernel_initializer](**kernel_init_params)
+    self._kernel_initializer = INITIALIZERS[kernel_initializer](
+        **kernel_init_params
+    )
     self._bias_initializer = INITIALIZERS[bias_initializer]()
 
   def build(self, input_shape):
@@ -203,7 +212,10 @@ class Conv2DTranspose(Layer):
       filters_shape = list(self._kernel_size) + [self._filters, input_shape[3]]
 
       shape_list = [filters_shape, [self._filters]]
-      init_fn_list = [lambda shape: self._kernel_initializer(shape), lambda shape: self._bias_initializer(shape)]
+      init_fn_list = [
+          lambda shape: self._kernel_initializer(shape),
+          lambda shape: self._bias_initializer(shape)
+      ]
       flag_list = [True, self._use_bias]
       trainable_list = [True] * 2
       self._build(shape_list, init_fn_list, flag_list, trainable_list)
@@ -212,8 +224,7 @@ class Conv2DTranspose(Layer):
     if self._padding == "SAME":
       out_size = input_size * stride_size
     else:
-      out_size = input_size * stride_size + max(
-          kernel_size - stride_size, 0)
+      out_size = input_size * stride_size + max(kernel_size - stride_size, 0)
     return out_size
 
   def __call__(self, inputs):
@@ -222,14 +233,20 @@ class Conv2DTranspose(Layer):
 
     filters = self._variables[0].weight
 
-    out_height = self._infer_spatial_size(inputs.shape.raw_shape[1], self._kernel_size[0], self._strides[0])
-    out_width = self._infer_spatial_size(inputs.shape.raw_shape[2], self._kernel_size[1], self._strides[1])
+    out_height = self._infer_spatial_size(
+        inputs.shape.raw_shape[1], self._kernel_size[0], self._strides[0]
+    )
+    out_width = self._infer_spatial_size(
+        inputs.shape.raw_shape[2], self._kernel_size[1], self._strides[1]
+    )
 
     if self._outputs_shape is None:
-      outputs_shape = inputs.shape.raw_shape[0], out_height, out_width, self._filters
+      outputs_shape = inputs.shape.raw_shape[
+          0], out_height, out_width, self._filters
     else:
       outputs_shape = self._outputs_shape
-    outputs_shape = Const(value=np.asarray(outputs_shape, dtype="int32")).output(0)
+    outputs_shape = Const(value=np.asarray(outputs_shape, dtype="int32")
+                         ).output(0)
 
     outputs = Conv2DBackpropInput(
         input_list=[filters, inputs, outputs_shape],
@@ -245,6 +262,7 @@ class Conv2DTranspose(Layer):
 
 
 class BatchNormalization(Layer):
+
   def __init__(
       self,
       axis=-1,
@@ -254,7 +272,7 @@ class BatchNormalization(Layer):
       gamma_initializer="ones",
       moving_mean_initializer="zeros",
       moving_variance_initializer="ones",
-    ):
+  ):
     super(BatchNormalization, self).__init__()
     self._axis = axis
     self._momentum = momentum
@@ -262,7 +280,8 @@ class BatchNormalization(Layer):
     self._beta_initializer = INITIALIZERS[beta_initializer]()
     self._gamma_initializer = INITIALIZERS[gamma_initializer]()
     self._moving_mean_initializer = INITIALIZERS[moving_mean_initializer]()
-    self._moving_variance_initializer = INITIALIZERS[moving_variance_initializer]()
+    self._moving_variance_initializer = INITIALIZERS[moving_variance_initializer
+                                                    ]()
 
   def build(self, input_shape):
     if not len(self._variables):
@@ -285,8 +304,8 @@ class BatchNormalization(Layer):
     from .math_ops import Mul, Rsqrt, Sub
 
     self.build(inputs.shape.raw_shape)
-    reduction_indices = [i for i in range(inputs.shape.ndims)
-        if i != self._axis
+    reduction_indices = [
+        i for i in range(inputs.shape.ndims) if i != self._axis
     ]
     beta = self._variables[0].weight
     gamma = self._variables[1].weight
@@ -297,20 +316,21 @@ class BatchNormalization(Layer):
       # compute batch mean and variance and use them for normalization
       axis = Const(value=np.asarray(reduction_indices, dtype="int32")).output(0)
       mean = Mean(input_list=[inputs, axis]).output(0)
-      variance = Mean(input_list=[SquaredDifference(
-          input_list=[inputs, mean]).output(0), axis]
+      variance = Mean(
+          input_list=[
+              SquaredDifference(input_list=[inputs, mean]).output(0), axis
+          ]
       ).output(0)
 
       # update moving mean and variance
       moving_mean = self._variables[2].weight
       moving_variance = self._variables[3].weight
 
-      const = Const(value=np.asarray(1 - self._momentum, dtype="float32")).output(0)
+      const = Const(value=np.asarray(1 - self._momentum, dtype="float32")
+                   ).output(0)
       delta_moving_mean = Mul(
-          input_list=[
-              const,
-              Sub(input_list=[mean, moving_mean]).output(0)
-          ]
+          input_list=[const,
+                      Sub(input_list=[mean, moving_mean]).output(0)]
       ).output(0)
       delta_moving_variance = Mul(
           input_list=[

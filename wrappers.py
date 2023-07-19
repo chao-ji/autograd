@@ -1,19 +1,24 @@
 """Functions that wrap raw operations."""
 import numpy as np
 
-from .array_ops import (Concat, ExpandDims, Fill, Pack, Pad, Range, Reshape,
-                        Slice, Squeeze, StridedSlice, Tile, Transpose, Unpack)
-from .data_flow_ops import (BroadcastTo, DynamicStitch, Gather, Select,
-                            StopGradient)
+from .array_ops import (
+    Concat, ExpandDims, Fill, Pack, Pad, Range, Reshape, Slice, Squeeze,
+    StridedSlice, Tile, Transpose, Unpack
+)
+from .data_flow_ops import (
+    BroadcastTo, DynamicStitch, Gather, Select, StopGradient
+)
 from .generic_ops import Const, OnesLike, Rank, Shape, Size, ZerosLike
-from .math_ops import (Add, BatchMatMul, Cumprod, Cumsum, Equal, Exp, FloorDiv,
-                       FloorMod, Greater, GreaterEqual, Less, LessEqual, Log,
-                       Log1p, MatMul, Maximum, Mean, Minimum, Mul, Neg,
-                       NotEqual, Prod, RealDiv, Reciprocal, Rsqrt, Sqrt,
-                       Square, SquaredDifference, Sub, Sum)
-from .nn_ops import (AvgPool2D, Conv2D, Conv2DBackpropInput, LogSoftmax,
-                     MaxPool2D, Relu, Sigmoid, Softmax,
-                     SoftmaxCrossEntropyWithLogits, Tanh)
+from .math_ops import (
+    Add, BatchMatMul, Cumprod, Cumsum, Equal, Exp, FloorDiv, FloorMod, Greater,
+    GreaterEqual, Less, LessEqual, Log, Log1p, MatMul, Maximum, Mean, Minimum,
+    Mul, Neg, NotEqual, Prod, RealDiv, Reciprocal, Rsqrt, Sqrt, Square,
+    SquaredDifference, Sub, Sum
+)
+from .nn_ops import (
+    AvgPool2D, Conv2D, Conv2DBackpropInput, LogSoftmax, MaxPool2D, Relu,
+    Sigmoid, Softmax, SoftmaxCrossEntropyWithLogits, Tanh
+)
 from .random_ops import RandomStandardNormal, RandomUniform
 from .resource_ops import Placeholder
 
@@ -39,6 +44,7 @@ def _tensorize_input(argpositions=[], argkeys=[], all_posargs=False):
   from .tensor import Tensor
 
   def parameterized_wrapper(func):
+
     def wrapper(*args, **kwargs):
       new_args = []
       new_kwargs = dict()
@@ -67,7 +73,9 @@ def _tensorize_input(argpositions=[], argkeys=[], all_posargs=False):
         else:
           new_kwargs[k] = v
       return func(*new_args, **new_kwargs)
+
     return wrapper
+
   return parameterized_wrapper
 
 
@@ -101,6 +109,7 @@ def ones(shape, name=None):
   tensor = Fill(input_list=[shape, one_scalar], name=name).output(0)
   return tensor
 
+
 @_tensorize_input(argpositions=(0,), argkeys=("tensor",))
 def shape(tensor, name=None):
   tensor_shape = Shape(input_list=[tensor], name=name).output(0)
@@ -132,7 +141,12 @@ def transpose(tensor, perm=None, name=None):
     else:
       minus_one_scalar = Const(value=np.asarray(-1, dtype="int32")).output(0)
       rank = tensor.op.get_rank_tensor(tensor_index=tensor.tensor_index)
-      perm = Range(input_list=[Add(input_list=[rank, minus_one_scalar]).output(0), minus_one_scalar, minus_one_scalar]).output(0)
+      perm = Range(
+          input_list=[
+              Add(input_list=[rank, minus_one_scalar]).output(0),
+              minus_one_scalar, minus_one_scalar
+          ]
+      ).output(0)
   return _transpose(tensor, perm, name=name)
 
 
@@ -146,6 +160,7 @@ def _transpose(tensor, perm, name=None):
 def _range(start, limit, delta, name=None):
   range_ = Range(input_list=[start, limit, delta], name=name).output(0)
   return range_
+
 
 def range(start, limit=None, delta=1, name=None):
   if limit is None:
@@ -180,9 +195,13 @@ def tile(inputs, multiples, name=None):
   return Tile(input_list=[inputs, multiples], name=name).output(0)
 
 
-@_tensorize_input(argpositions=(0, 1, 2, 3), argkeys=("inputs", "begin", "end", "strides"))
+@_tensorize_input(
+    argpositions=(0, 1, 2, 3), argkeys=("inputs", "begin", "end", "strides")
+)
 def strided_slice(inputs, begin, end, strides, name=None):
-  return StridedSlice(input_list=[inputs, begin, end, strides], name=name).output(0)
+  return StridedSlice(
+      input_list=[inputs, begin, end, strides], name=name
+  ).output(0)
 
 
 @_tensorize_input(argpositions=(0, 1, 2), argkeys=("inputs", "begin", "size"))
@@ -203,7 +222,9 @@ def _concat(*inputs, name=None):
 
 @_tensorize_input(argpositions=(0, 1), argkeys=("tensor", "paddings"))
 def pad(tensor, paddings, constant_values=0, name=None):
-  return Pad(input_list=[tensor, paddings], constant_values=constant_values, name=name).output(0)
+  return Pad(
+      input_list=[tensor, paddings], constant_values=constant_values, name=name
+  ).output(0)
 
 
 @_tensorize_input(argpositions=(0, 1), argkeys=("tensor", "axis"))
@@ -275,6 +296,7 @@ def add_n(inputs, name=None):
   assert isinstance(inputs, (list, tuple))
   return _add_n(*inputs)
 
+
 @_tensorize_input(all_posargs=True)
 def _add_n(*inputs, name=None):
   return AddN(input_list=inputs, name=name).output(0)
@@ -291,6 +313,7 @@ def reduce_mean(tensor, axis=None, keepdims=False, name=None):
       axis = Range(input_list=[zero_scalar, rank, one_scalar]).output(0)
   return _reduce_mean(tensor, axis, keepdims)
 
+
 @_tensorize_input(argpositions=(0, 1), argkeys=("tensor", "axis"))
 def _reduce_mean(tensor, axis, keepdims=False, name=None):
   return Mean(input_list=[tensor, axis], keepdims=keepdims, name=name).output(0)
@@ -306,6 +329,7 @@ def reduce_sum(tensor, axis=None, keepdims=False, name=None):
       rank = tensor.op.get_rank_tensor(tensor_index=tensor.tensor_index)
       axis = Range(input_list=[zero_scalar, rank, one_scalar]).output(0)
   return _reduce_sum(tensor, axis, keepdims)
+
 
 @_tensorize_input(argpositions=(0, 1), argkeys=("tensor", "axis"))
 def _reduce_sum(tensor, axis, keepdims=False, name=None):
@@ -332,9 +356,13 @@ def _reduce_prod(tensor, axis, keepdims=False, name=None):
 @_tensorize_input(argpositions=(0, 1), argkeys=("x", "y"))
 def matmul(x, y, transpose_x=False, transpose_y=False, name=None):
   if x.shape.level > 0 and x.shape.ndims == 2 and y.shape.level > 0 and y.shape.ndims == 2:
-    return MatMul(input_list=[x, y], transpose_x=transpose_x, transpose_y=transpose_y).output(0)
+    return MatMul(
+        input_list=[x, y], transpose_x=transpose_x, transpose_y=transpose_y
+    ).output(0)
   else:
-    return BatchMatMul(input_list=[x, y], transpose_x=transpose_x, transpose_y=transpose_y).output(0)
+    return BatchMatMul(
+        input_list=[x, y], transpose_x=transpose_x, transpose_y=transpose_y
+    ).output(0)
 
 
 @_tensorize_input(argpositions=(0, 1), argkeys=("x", "y"))
@@ -379,12 +407,22 @@ def not_equal(x, y, name=None):
 
 @_tensorize_input(argpositions=(0, 1), argkeys=("tensor", "axis"))
 def cumsum(tensor, axis=0, exclusive=False, reverse=False, name=None):
-  return Cumsum(input_list=[tensor, axis], exclusive=exclusive, reverse=reverse, name=name).output(0)
+  return Cumsum(
+      input_list=[tensor, axis],
+      exclusive=exclusive,
+      reverse=reverse,
+      name=name
+  ).output(0)
 
 
 @_tensorize_input(argpositions=(0, 1), argkeys=("tensor", "axis"))
 def cumprod(tensor, axis=0, exclusive=False, reverse=False, name=None):
-  return Cumprod(input_list=[tensor, axis], exclusive=exclusive, reverse=reverse, name=name).output(0)
+  return Cumprod(
+      input_list=[tensor, axis],
+      exclusive=exclusive,
+      reverse=reverse,
+      name=name
+  ).output(0)
 
 
 @_tensorize_input(argpositions=(0,), argkeys=("tensor",))
@@ -451,22 +489,41 @@ def stop_gradient(tensor, name=None):
 
 @_tensorize_input(argpositions=(0, 1), argkeys=("inputs", "filters"))
 def conv2d(inputs, filters, strides, padding, name=None):
-  return Conv2D(input_list=[inputs, filters], strides=strides, padding=padding, name=name).output(0)
+  return Conv2D(
+      input_list=[inputs, filters], strides=strides, padding=padding, name=name
+  ).output(0)
 
 
 @_tensorize_input(argpositions=(0, 1, 2), argkeys=("inputs", "filters"))
-def conv2d_transpose(inputs, filters, output_shape, strides, padding, name=None):
-  return Conv2DBackpropInput(input_list=[filters, inputs, output_shape], strides=strides, padding=padding, name=name).output(0)
+def conv2d_transpose(
+    inputs, filters, output_shape, strides, padding, name=None
+):
+  return Conv2DBackpropInput(
+      input_list=[filters, inputs, output_shape],
+      strides=strides,
+      padding=padding,
+      name=name
+  ).output(0)
 
 
 @_tensorize_input(argpositions=(0,), argkeys=("inputs",))
 def max_pool2d(inputs, filters_size, strides, padding, name=None):
-  return MaxPool2D(input_list=[inputs], strides=strides, filters_size=filters_size, padding=padding).output(0)
+  return MaxPool2D(
+      input_list=[inputs],
+      strides=strides,
+      filters_size=filters_size,
+      padding=padding
+  ).output(0)
 
 
 @_tensorize_input(argpositions=(0,), argkeys=("inputs",))
 def avg_pool2d(inputs, filters_size, strides, padding, name=None):
-  return AvgPool2D(input_list=[inputs], strides=strides, filters_size=filters_size, padding=padding).output(0)
+  return AvgPool2D(
+      input_list=[inputs],
+      strides=strides,
+      filters_size=filters_size,
+      padding=padding
+  ).output(0)
 
 
 @_tensorize_input(argpositions=(0,), argkeys=("tensor",))
@@ -483,10 +540,11 @@ def tanh(tensor, name=None):
 def relu(tensor, name=None):
   return Relu(input_list=[tensor], name=name).output(0)
 
+
 @_tensorize_input(argpositions=(0,), argkeys=("tensor",))
 def leaky_relu(tensor, alpha=0.2, name=None):
-  return LeakyRelu(
-      alpha=alpha, input_list=[tensor], name=name).output(0)
+  return LeakyRelu(alpha=alpha, input_list=[tensor], name=name).output(0)
+
 
 @_tensorize_input(argpositions=(0,), argkeys=("tensor",))
 def log_softmax(tensor, name=None):
@@ -502,7 +560,17 @@ def random_uniform(shape, minval=0.0, maxval=1.0, name=None):
   return _random_uniform(shape, minval, maxval, name)
 
 
-@_tensorize_input(argpositions=(0, 1, 2,), argkeys=("shape", "minval", "maxval",))
+@_tensorize_input(
+    argpositions=(
+        0,
+        1,
+        2,
+    ), argkeys=(
+        "shape",
+        "minval",
+        "maxval",
+    )
+)
 def _random_uniform(shape, minval=0.0, maxval=1.0, name=None):
   ru = RandomUniform(input_list=[shape], name=name).output(0)
   sub = Sub(input_list=[maxval, minval]).output(0)
@@ -516,7 +584,17 @@ def random_normal(shape, mean=0.0, stddev=1.0, name=None):
   return _random_normal(shape, mean, stddev, name)
 
 
-@_tensorize_input(argpositions=(0, 1, 2,), argkeys=("shape", "mean", "stddev",))
+@_tensorize_input(
+    argpositions=(
+        0,
+        1,
+        2,
+    ), argkeys=(
+        "shape",
+        "mean",
+        "stddev",
+    )
+)
 def _random_normal(shape, mean, stddev, name=None):
   rsn = RandomStandardNormal(input_list=[shape], name=name).output(0)
   mul = Mul(input_list=[stddev, rsn]).output(0)
@@ -531,7 +609,8 @@ def dropout(tensor, rate, seed=0, name=None):
   assert isinstance(seed, int)
 
   if tensor.shape.level == 2:
-    shape = Const(value=np.asarray(tensor.shape.raw_shape).astype("int32")).output(0)
+    shape = Const(value=np.asarray(tensor.shape.raw_shape).astype("int32")
+                 ).output(0)
   else:
     shape = tensor.get_shape_op(tensor_index=tensor.tensor_index)
 
@@ -549,8 +628,15 @@ def dropout(tensor, rate, seed=0, name=None):
   return select
 
 
-@_tensorize_input(argpositions=(0, 1, 2, 3, 4, 5), argkeys=("tensor", "mean", "variance", "offset", "scale", "variance_epsilon"))
-def batch_normalization(tensor, mean, variance, offset, scale, variance_epsilon=0.0001, name=None):
+@_tensorize_input(
+    argpositions=(0, 1, 2, 3, 4, 5),
+    argkeys=(
+        "tensor", "mean", "variance", "offset", "scale", "variance_epsilon"
+    )
+)
+def batch_normalization(
+    tensor, mean, variance, offset, scale, variance_epsilon=0.0001, name=None
+):
 
   add = Add(input_list=[variance, variance_epsilon]).output(0)
 
@@ -590,7 +676,8 @@ def softmax_cross_entropy_with_logits(labels, logits, name=None):
 
   def _flat_tensor(tensor):
     if tensor.shape.level == 0:
-      tensor_rank = Const(value=np.asarray(tensor.shape.ndims, dtype="int32")).output(0)
+      tensor_rank = Const(value=np.asarray(tensor.shape.ndims, dtype="int32")
+                         ).output(0)
     else:
       tensor_rank = tensor.op.get_rank_tensor(tensor.tensor_index)
 
@@ -605,7 +692,9 @@ def softmax_cross_entropy_with_logits(labels, logits, name=None):
   reshaped_logits, logits_shape, pack = _flat_tensor(logits)
   reshaped_labels, _, _ = _flat_tensor(labels)
 
-  ce = SoftmaxCrossEntropyWithLogits(input_list=[reshaped_logits, reshaped_labels], name=name).output(0)
+  ce = SoftmaxCrossEntropyWithLogits(
+      input_list=[reshaped_logits, reshaped_labels], name=name
+  ).output(0)
   slice2 = Slice(input_list=[logits_shape, zero_array, pack]).output(0)
   loss = Reshape(input_list=[ce, slice2]).output(0)
 

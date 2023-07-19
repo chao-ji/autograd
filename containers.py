@@ -1,4 +1,3 @@
-
 import collections
 import contextlib
 import logging
@@ -84,6 +83,7 @@ class Graph(object):
 
 
 class Runtime(object):
+
   def __init__(self):
     # map: OpName -> list of tensor values
     self._values = collections.defaultdict(list)

@@ -1,4 +1,3 @@
-
 import numpy as np
 
 
@@ -7,6 +6,7 @@ class Optimizer(object):
 
   Subclasses must implement abstract method `apply_gradients`.
   """
+
   def __init__(self, **params):
     """Constructor.
 
@@ -36,6 +36,7 @@ class Optimizer(object):
 
 class GradientDescentOptimizer(Optimizer):
   """The Vanilla Gradient Descent Optimizer."""
+
   def apply_gradients(self, grads_and_vars, runtime):
     """Apply the computed gradient w.r.t. trainable variables.
 
@@ -49,11 +50,14 @@ class GradientDescentOptimizer(Optimizer):
       var_value = runtime.get_variable_value(var_id).astype("float32")
       grad_value = runtime.get_tensor_value(grad).astype("float32")
 
-      runtime.set_variable_value(var_id, var_value - self._params["alpha"] * grad_value)
+      runtime.set_variable_value(
+          var_id, var_value - self._params["alpha"] * grad_value
+      )
 
 
 class AdamOptimizer(Optimizer):
   """Adam optimizer"""
+
   def __init__(self, **params):
     """Constructor.
 
@@ -61,8 +65,11 @@ class AdamOptimizer(Optimizer):
       params: a dict mapping from parameter names to parameters.
     """
     self._params = params
-    self._params_str = ', '.join(['%s=%s' % (k, v) for k, v in params.items()
-        if k in ('alpha', 'beta1', 'beta2', 'epsilon')])
+    self._params_str = ', '.join([
+        '%s=%s' % (k, v)
+        for k, v in params.items()
+        if k in ('alpha', 'beta1', 'beta2', 'epsilon')
+    ])
 
     self._t = 0
     self._m = dict()
@@ -75,10 +82,12 @@ class AdamOptimizer(Optimizer):
       grads_and_vars: a list of (gradient, variable) pairs, where gradient is
         numpy array, and variable is a Node instance.
     """
-    alpha, beta1, beta2, epsilon = (np.asarray(self._params['alpha'], "float32"),
-                                    np.asarray(self._params['beta1'], "float32"),
-                                    np.asarray(self._params['beta2'], "float32"),
-                                    np.asarray(self._params['epsilon'], "float32"))
+    alpha, beta1, beta2, epsilon = (
+        np.asarray(self._params['alpha'],
+                   "float32"), np.asarray(self._params['beta1'], "float32"),
+        np.asarray(self._params['beta2'],
+                   "float32"), np.asarray(self._params['epsilon'], "float32")
+    )
     t = self._t + 1
     m = self._m
     v = self._v
@@ -91,10 +100,10 @@ class AdamOptimizer(Optimizer):
       var_value = runtime.get_variable_value(var_id).astype("float32")
       grad_value = runtime.get_tensor_value(grad).astype("float32")
 
-      m[var_id] = beta1 * m.get(var_id, np.zeros(var_shape,
-          dtype="float32")) + (1 - beta1) * grad_value
-      v[var_id] = beta2 * v.get(var_id, np.zeros(var_shape,
-          dtype="float32")) + (1 - beta2) * grad_value * grad_value
+      m[var_id] = beta1 * m.get(var_id, np.zeros(var_shape, dtype="float32")
+                               ) + (1 - beta1) * grad_value
+      v[var_id] = beta2 * v.get(var_id, np.zeros(var_shape, dtype="float32")
+                               ) + (1 - beta2) * grad_value * grad_value
       runtime.set_variable_value(
           var_id,
           var_value - alpha_t * m[var_id] / (np.sqrt(v[var_id]) + epsilon)
@@ -107,6 +116,7 @@ class AdamOptimizer(Optimizer):
 
 class RMSPropOptimizer(Optimizer):
   """RMSProp Optimizer"""
+
   def __init__(self, **params):
     """Constructor.
 
@@ -114,8 +124,11 @@ class RMSPropOptimizer(Optimizer):
       params: a dict mapping from parameter names to parameters.
     """
     self._params = params
-    self._params_str = ', '.join(['%s=%s' % (k, v) for k, v in params.items()
-        if k in ('alpha', 'rho', 'momentum', 'epsilon')])
+    self._params_str = ', '.join([
+        '%s=%s' % (k, v)
+        for k, v in params.items()
+        if k in ('alpha', 'rho', 'momentum', 'epsilon')
+    ])
 
     self._mean_square = dict()
     self._moment = dict()
@@ -127,10 +140,10 @@ class RMSPropOptimizer(Optimizer):
       grads_and_vars: a list of (gradient, variable) pairs, where gradient is
         numpy array, and variable is a Node instance.
     """
-    alpha, rho, momentum, epsilon = (self._params['alpha'],
-                                     self._params['rho'],
-                                     self._params['momentum'],
-                                     self._params['epsilon'])
+    alpha, rho, momentum, epsilon = (
+        self._params['alpha'], self._params['rho'], self._params['momentum'],
+        self._params['epsilon']
+    )
 
     mean_square = self._mean_square
     moment = self._moment
@@ -149,12 +162,16 @@ class RMSPropOptimizer(Optimizer):
       var_value = runtime.get_variable_value(var_id)
       grad_value = runtime.get_tensor_value(grad)
 
-      mean_square[var_id] = (rho * mean_square.get(var_id,
-          np.zeros(var_shape)) + (1 - rho) * grad_value * grad_value)
+      mean_square[var_id] = (
+          rho * mean_square.get(var_id, np.zeros(var_shape)) +
+          (1 - rho) * grad_value * grad_value
+      )
 
-      moment[var_id] = momentum * moment.get(var_id,
-          np.zeros(var_shape)) + alpha * grad_value / (np.sqrt(
-          mean_square[var_id]) + epsilon)
+      moment[var_id] = momentum * moment.get(
+          var_id, np.zeros(var_shape)
+      ) + alpha * grad_value / (
+          np.sqrt(mean_square[var_id]) + epsilon
+      )
       runtime.set_variable_value(var_id, var_value - moment[var_id])
 
     self._mean_square = mean_square

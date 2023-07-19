@@ -6,6 +6,7 @@ from .tensor_shape import TensorShape
 
 
 class RandomUniform(Operation, _TensorShapeAsInput):
+
   def __init__(self, input_list, seed=None, name=None, graph=None):
     super(RandomUniform, self).__init__(
         graph=graph, input_list=input_list, name=name
@@ -18,8 +19,8 @@ class RandomUniform(Operation, _TensorShapeAsInput):
     return outputs
 
 
-
 class RandomStandardNormal(Operation, _TensorShapeAsInput):
+
   def __init__(self, input_list, seed=None, name=None, graph=None):
     super(RandomStandardNormal, self).__init__(
         graph=graph, input_list=input_list, name=name

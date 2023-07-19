@@ -2,8 +2,9 @@
 import numpy as np
 
 from .generic_ops import Const
-from .mixins import (_BinaryOp, _PickFirstAmongCompatibleShapes, _ReductionOp,
-                     _ShapeAsIs)
+from .mixins import (
+    _BinaryOp, _PickFirstAmongCompatibleShapes, _ReductionOp, _ShapeAsIs
+)
 from .operation import Operation
 from .tensor_shape import TensorShape
 
@@ -59,22 +60,12 @@ class Add(Operation, _BinaryOp):
       shape_tensor = op_x.get_shape_tensor(tensor_index=tensor_index_x)
       shape1_tensor = op_y.get_shape_tensor(tensor_index=tensor_index_y)
 
-      bga = BroadcastGradientArgs(
-          input_list=[shape_tensor, shape1_tensor]
-      )
+      bga = BroadcastGradientArgs(input_list=[shape_tensor, shape1_tensor])
 
-      sum0 = Sum(
-          input_list=[in_grad_tensors[0], bga.output(0)]
-      )
-      sum1 = Sum(
-          input_list=[in_grad_tensors[0], bga.output(1)]
-      )
-      bp_x = Reshape(
-          input_list=[sum0.output(0), shape_tensor]
-      )
-      bp_y = Reshape(
-          input_list=[sum1.output(0), shape1_tensor]
-      )
+      sum0 = Sum(input_list=[in_grad_tensors[0], bga.output(0)])
+      sum1 = Sum(input_list=[in_grad_tensors[0], bga.output(1)])
+      bp_x = Reshape(input_list=[sum0.output(0), shape_tensor])
+      bp_y = Reshape(input_list=[sum1.output(0), shape1_tensor])
 
       out_grad_tensors = [bp_x.output(0), bp_y.output(0)]
 
@@ -90,9 +81,7 @@ class Neg(Operation, _ShapeAsIs):
 
   def _grad_func(self, in_grad_tensors):
     with self._graph.as_default_graph():
-      bp_inputs = Neg(
-          input_list=[in_grad_tensors[0]]
-      )
+      bp_inputs = Neg(input_list=[in_grad_tensors[0]])
       out_grad_tensors = [bp_inputs.output(0)]
 
     return out_grad_tensors
@@ -114,31 +103,18 @@ class Sub(Operation, _BinaryOp):
       op_y = self._input_list[1].op
       tensor_index_y = self._input_list[1].tensor_index
 
-
       shape_tensor = op_x.get_shape_tensor(tensor_index=tensor_index_x)
       shape1_tensor = op_y.get_shape_tensor(tensor_index=tensor_index_y)
 
-      bga = BroadcastGradientArgs(
-          input_list=[shape_tensor, shape1_tensor]
-      )
+      bga = BroadcastGradientArgs(input_list=[shape_tensor, shape1_tensor])
 
-      sum0 = Sum(
-          input_list=[in_grad_tensors[0], bga.output(0)]
-      )
+      sum0 = Sum(input_list=[in_grad_tensors[0], bga.output(0)])
 
-      neg = Neg(
-          input_list=[in_grad_tensors[0]]
-      )
-      sum1 = Sum(
-          input_list=[neg.output(0), bga.output(1)]
-      )
+      neg = Neg(input_list=[in_grad_tensors[0]])
+      sum1 = Sum(input_list=[neg.output(0), bga.output(1)])
 
-      bp_x = Reshape(
-          input_list=[sum0.output(0), shape_tensor]
-      )
-      bp_y = Reshape(
-          input_list=[sum1.output(0), shape1_tensor]
-      )
+      bp_x = Reshape(input_list=[sum0.output(0), shape_tensor])
+      bp_y = Reshape(input_list=[sum1.output(0), shape1_tensor])
 
       out_grad_tensors = [bp_x.output(0), bp_y.output(0)]
 
@@ -164,30 +140,16 @@ class Mul(Operation, _BinaryOp):
       shape_tensor = op_x.get_shape_tensor(tensor_index=tensor_index_x)
       shape1_tensor = op_y.get_shape_tensor(tensor_index=tensor_index_y)
 
-      bga = BroadcastGradientArgs(
-          input_list=[shape_tensor, shape1_tensor]
-      )
+      bga = BroadcastGradientArgs(input_list=[shape_tensor, shape1_tensor])
 
-      mul = Mul(
-          input_list=[in_grad_tensors[0], self._input_list[1]]
-      )
-      mul1 = Mul(
-          input_list=[in_grad_tensors[0], self._input_list[0]]
-      )
+      mul = Mul(input_list=[in_grad_tensors[0], self._input_list[1]])
+      mul1 = Mul(input_list=[in_grad_tensors[0], self._input_list[0]])
 
-      sum0 = Sum(
-          input_list=[mul.output(0), bga.output(0)]
-      )
-      sum1 = Sum(
-          input_list=[mul1.output(0), bga.output(1)]
-      )
+      sum0 = Sum(input_list=[mul.output(0), bga.output(0)])
+      sum1 = Sum(input_list=[mul1.output(0), bga.output(1)])
 
-      bp_x = Reshape(
-          input_list=[sum0.output(0), shape_tensor]
-      )
-      bp_y = Reshape(
-          input_list=[sum1.output(0), shape1_tensor]
-      )
+      bp_x = Reshape(input_list=[sum0.output(0), shape_tensor])
+      bp_y = Reshape(input_list=[sum1.output(0), shape1_tensor])
 
       out_grad_tensors = [bp_x.output(0), bp_y.output(0)]
 
@@ -205,21 +167,11 @@ class RealDiv(Operation, _BinaryOp):
     from .array_ops import Reshape
 
     with self._graph.as_default_graph():
-      neg = Neg(
-          input_list=[self._input_list[0]]
-      )
-      div = RealDiv(
-          input_list=[in_grad_tensors[0], self._input_list[1]]
-      )
-      div1 = RealDiv(
-          input_list=[neg.output(0), self._input_list[1]]
-      )
-      div2 = RealDiv(
-          input_list=[div1.output(0), self._input_list[1]]
-      )
-      mul = Mul(
-          input_list=[div2.output(0), in_grad_tensors[0]]
-      )
+      neg = Neg(input_list=[self._input_list[0]])
+      div = RealDiv(input_list=[in_grad_tensors[0], self._input_list[1]])
+      div1 = RealDiv(input_list=[neg.output(0), self._input_list[1]])
+      div2 = RealDiv(input_list=[div1.output(0), self._input_list[1]])
+      mul = Mul(input_list=[div2.output(0), in_grad_tensors[0]])
 
       op_x = self._input_list[0].op
       tensor_index_x = self._input_list[0].tensor_index
@@ -229,22 +181,12 @@ class RealDiv(Operation, _BinaryOp):
       shape_tensor = op_x.get_shape_tensor(tensor_index=tensor_index_x)
       shape1_tensor = op_y.get_shape_tensor(tensor_index=tensor_index_y)
 
-      bga = BroadcastGradientArgs(
-          input_list=[shape_tensor, shape1_tensor]
-      )
-      sum0 = Sum(
-          input_list=[div.output(0), bga.output(0)]
-      )
-      sum1 = Sum(
-          input_list=[mul.output(0), bga.output(1)]
-      )
+      bga = BroadcastGradientArgs(input_list=[shape_tensor, shape1_tensor])
+      sum0 = Sum(input_list=[div.output(0), bga.output(0)])
+      sum1 = Sum(input_list=[mul.output(0), bga.output(1)])
 
-      bp_x = Reshape(
-          input_list=[sum0.output(0), shape_tensor]
-      )
-      bp_y = Reshape(
-          input_list=[sum1.output(0), shape1_tensor]
-      )
+      bp_x = Reshape(input_list=[sum0.output(0), shape_tensor])
+      bp_y = Reshape(input_list=[sum1.output(0), shape1_tensor])
 
       out_grad_tensors = [bp_x.output(0), bp_y.output(0)]
 
@@ -281,26 +223,14 @@ class FloorMod(Operation, _BinaryOp):
       shape_tensor = op_x.get_shape_tensor(tensor_index=tensor_index_x)
       shape1_tensor = op_y.get_shape_tensor(tensor_index=tensor_index_y)
 
-      bga = BroadcastGradientArgs(
-          input_list=[shape_tensor, shape1_tensor]
-      )
-      mul = Mul(
-          input_list=[in_grad_tensors[0], neg.output(0)],
-      )
+      bga = BroadcastGradientArgs(input_list=[shape_tensor, shape1_tensor])
+      mul = Mul(input_list=[in_grad_tensors[0], neg.output(0)],)
 
-      sum0 = Sum(
-          input_list=[in_grad_tensors[0], bga.output(0)]
-      )
-      sum1 = Sum(
-          input_list=[mul.output(0)] + [bga.output(1)]
-      )
+      sum0 = Sum(input_list=[in_grad_tensors[0], bga.output(0)])
+      sum1 = Sum(input_list=[mul.output(0)] + [bga.output(1)])
 
-      bp_x = Reshape(
-          input_list=[sum0.output(0), shape_tensor]
-      )
-      bp_y = Reshape(
-          input_list=[sum1.output(0), shape1_tensor]
-      )
+      bp_x = Reshape(input_list=[sum0.output(0), shape_tensor])
+      bp_y = Reshape(input_list=[sum1.output(0), shape1_tensor])
 
       out_grad_tensors = [bp_x.output(0), bp_y.output(0)]
 
@@ -327,10 +257,7 @@ class Maximum(Operation, _BinaryOp):
       shape_tensor = op_x.get_shape_tensor(tensor_index=tensor_index_x)
       shape1_tensor = op_y.get_shape_tensor(tensor_index=tensor_index_y)
 
-      ge = GreaterEqual(
-          input_list=[self._input_list[0],
-          self._input_list[1]],
-      )
+      ge = GreaterEqual(input_list=[self._input_list[0], self._input_list[1]],)
       zeros_tensor = in_grad_tensors[0].op.get_zeros_tensor(
           tensor_index=in_grad_tensors[0].tensor_index
       )
@@ -340,23 +267,13 @@ class Maximum(Operation, _BinaryOp):
       select1 = Select(
           input_list=[ge.output(0), zeros_tensor, in_grad_tensors[0]],
       )
-      bga = BroadcastGradientArgs(
-          input_list=[shape_tensor, shape1_tensor],
-      )
+      bga = BroadcastGradientArgs(input_list=[shape_tensor, shape1_tensor],)
 
-      sum0 = Sum(
-          input_list=[select.output(0), bga.output(0)],
-      )
-      sum1 = Sum(
-          input_list=[select1.output(0), bga.output(1)],
-      )
+      sum0 = Sum(input_list=[select.output(0), bga.output(0)],)
+      sum1 = Sum(input_list=[select1.output(0), bga.output(1)],)
 
-      bp_x = Reshape(
-          input_list=[sum0.output(0), shape_tensor],
-      )
-      bp_y = Reshape(
-          input_list=[sum1.output(0), shape1_tensor],
-      )
+      bp_x = Reshape(input_list=[sum0.output(0), shape_tensor],)
+      bp_y = Reshape(input_list=[sum1.output(0), shape1_tensor],)
 
       out_grad_tensors = [bp_x.output(0), bp_y.output(0)]
 
@@ -365,6 +282,7 @@ class Maximum(Operation, _BinaryOp):
 
 class Minimum(Operation, _BinaryOp):
   """Minimum"""
+
   def _run(self, x, y):
     outputs = np.minimum(x, y)
     return outputs
@@ -382,10 +300,7 @@ class Minimum(Operation, _BinaryOp):
       shape_tensor = op_x.get_shape_tensor(tensor_index=tensor_index_x)
       shape1_tensor = op_y.get_shape_tensor(tensor_index=tensor_index_y)
 
-      le = LessEqual(
-          input_list=[self._input_list[0],
-          self._input_list[1]],
-      )
+      le = LessEqual(input_list=[self._input_list[0], self._input_list[1]],)
       zeros_tensor = in_grad_tensors[0].op.get_zeros_tensor(
           tensor_index=in_grad_tensors[0].tensor_index
       )
@@ -395,23 +310,13 @@ class Minimum(Operation, _BinaryOp):
       select1 = Select(
           input_list=[le.output(0), zeros_tensor, in_grad_tensors[0]],
       )
-      bga = BroadcastGradientArgs(
-          input_list=[shape_tensor, shape1_tensor],
-      )
+      bga = BroadcastGradientArgs(input_list=[shape_tensor, shape1_tensor],)
 
-      sum0 = Sum(
-          input_list=[select.output(0), bga.output(0)],
-      )
-      sum1 = Sum(
-          input_list=[select1.output(0), bga.output(1)],
-      )
+      sum0 = Sum(input_list=[select.output(0), bga.output(0)],)
+      sum1 = Sum(input_list=[select1.output(0), bga.output(1)],)
 
-      bp_x = Reshape(
-          input_list=[sum0.output(0), shape_tensor],
-      )
-      bp_y = Reshape(
-          input_list=[sum1.output(0), shape1_tensor],
-      )
+      bp_x = Reshape(input_list=[sum0.output(0), shape_tensor],)
+      bp_y = Reshape(input_list=[sum1.output(0), shape1_tensor],)
 
       out_grad_tensors = [bp_x.output(0), bp_y.output(0)]
 
@@ -429,22 +334,12 @@ class DivNoNan(Operation, _BinaryOp):
     from .array_ops import Reshape
 
     with self._graph.as_default_graph():
-      div = DivNoNan(
-          input_list=[in_grad_tensors[0], self._input_list[1]],
-      )
-      neg = Neg(
-          input_list=[self._input_list[0]],
-      )
-      div1 = DivNoNan(
-          input_list=[neg.output(0), self._input_list[1]],
-      )
-      div2 = DivNoNan(
-          input_list=[div1.output(0), self._input_list[1]],
-      )
+      div = DivNoNan(input_list=[in_grad_tensors[0], self._input_list[1]],)
+      neg = Neg(input_list=[self._input_list[0]],)
+      div1 = DivNoNan(input_list=[neg.output(0), self._input_list[1]],)
+      div2 = DivNoNan(input_list=[div1.output(0), self._input_list[1]],)
 
-      mul = Mul(
-          input_list=[in_grad_tensors[0], div2.output(0)],
-      )
+      mul = Mul(input_list=[in_grad_tensors[0], div2.output(0)],)
 
       op_x = self._input_list[0].op
       tensor_index_x = self._input_list[0].tensor_index
@@ -454,23 +349,13 @@ class DivNoNan(Operation, _BinaryOp):
       shape_tensor = op_x.get_shape_tensor(tensor_index=tensor_index_x)
       shape1_tensor = op_y.get_shape_tensor(tensor_index=tensor_index_y)
 
-      bga = BroadcastGradientArgs(
-          input_list=[shape_tensor, shape1_tensor],
-      )
+      bga = BroadcastGradientArgs(input_list=[shape_tensor, shape1_tensor],)
 
-      sum0 = Sum(
-          input_list=[div.output(0), bga.output(0)],
-      )
-      sum1 = Sum(
-          input_list=[mul.output(0), bga.output(1)],
-      )
+      sum0 = Sum(input_list=[div.output(0), bga.output(0)],)
+      sum1 = Sum(input_list=[mul.output(0), bga.output(1)],)
 
-      bp_x = Reshape(
-          input_list=[sum0.output(0), shape_tensor],
-      )
-      bp_y = Reshape(
-          input_list=[sum1.output(0), shape1_tensor],
-      )
+      bp_x = Reshape(input_list=[sum0.output(0), shape_tensor],)
+      bp_y = Reshape(input_list=[sum1.output(0), shape1_tensor],)
 
       out_grad_tensors = [bp_x.output(0), bp_y.output(0)]
 
@@ -516,7 +401,8 @@ class Mean(Operation, _ReductionOp):
     from .data_flow_ops import BroadcastTo, DynamicStitch
 
     with self._graph.as_default_graph():
-      op, tensor_index = self._input_list[0].op, self._input_list[0].tensor_index
+      op, tensor_index = self._input_list[0].op, self._input_list[0
+                                                                 ].tensor_index
 
       shape_tensor = op.get_shape_tensor(tensor_index=tensor_index)
       size_tensor = shape_tensor.op.get_size_tensor(tensor_index=0)
@@ -525,20 +411,21 @@ class Mean(Operation, _ReductionOp):
       shape1_tensor = mod.get_shape_tensor(tensor_index=0)
       fill = Fill(
           input_list=[
-            shape1_tensor,
-            Const(value=np.asarray(1, dtype="int32")).output(0)
+              shape1_tensor,
+              Const(value=np.asarray(1, dtype="int32")).output(0)
           ],
       )
       range0 = Range(
           input_list=[
-              Const(value=np.asarray(0, dtype="int32")).output(0),
-              size_tensor,
+              Const(value=np.asarray(0, dtype="int32")).output(0), size_tensor,
               Const(value=np.asarray(1, dtype="int32")).output(0)
           ],
       )
       ds = DynamicStitch(
           input_list=[
-              range0.output(0), mod.output(0), shape_tensor, fill.output(0)
+              range0.output(0),
+              mod.output(0), shape_tensor,
+              fill.output(0)
           ],
       )
       shape3_tensor = self.get_shape_tensor(tensor_index=0)
@@ -561,9 +448,7 @@ class Mean(Operation, _ReductionOp):
           ],
       )
       div = FloorDiv(input_list=[prod.output(0), maximum.output(0)])
-      reshape = Reshape(
-          input_list=[in_grad_tensors[0], ds.output(0)],
-      )
+      reshape = Reshape(input_list=[in_grad_tensors[0], ds.output(0)],)
       bt = BroadcastTo(input_list=[reshape.output(0), shape_tensor])
       bp_inputs = RealDiv(input_list=[bt.output(0), div.output(0)])
       out_grad_tensors = [bp_inputs.output(0)]
@@ -593,10 +478,10 @@ class Sum(Operation, _ReductionOp):
     from .data_flow_ops import BroadcastTo, DynamicStitch
 
     with self._graph.as_default_graph():
-      op, tensor_index = self._input_list[0].op, self._input_list[0].tensor_index
+      op, tensor_index = self._input_list[0].op, self._input_list[0
+                                                                 ].tensor_index
       shape_tensor = op.get_shape_tensor(tensor_index=tensor_index)
       size_tensor = shape_tensor.op.get_size_tensor(tensor_index=0)
-
 
       add = Add(input_list=[size_tensor, self._input_list[1]])
       mod = FloorMod(input_list=[add.output(0), size_tensor])
@@ -608,13 +493,18 @@ class Sum(Operation, _ReductionOp):
               Const(value=np.asarray(1, dtype="int32")).output(0)
           ],
       )
-      range0 = Range(input_list=[
-          Const(value=np.asarray(0, dtype="int32")).output(0),
-          size_tensor,
-          Const(value=np.asarray(1, dtype="int32")).output(0)]
+      range0 = Range(
+          input_list=[
+              Const(value=np.asarray(0, dtype="int32")).output(0), size_tensor,
+              Const(value=np.asarray(1, dtype="int32")).output(0)
+          ]
       )
       ds = DynamicStitch(
-          input_list=[range0.output(0), mod.output(0), shape_tensor, fill.output(0)]
+          input_list=[
+              range0.output(0),
+              mod.output(0), shape_tensor,
+              fill.output(0)
+          ]
       )
       reshape = Reshape(input_list=[in_grad_tensors[0], ds.output(0)])
       bp_inputs = BroadcastTo(input_list=[reshape.output(0), shape_tensor])
@@ -643,68 +533,110 @@ class Prod(Operation, _ReductionOp):
     return outputs
 
   def _grad_func(self, in_grad_tensors):
-    from .array_ops import (Concat, Fill, InvertPermutation, ListDiff, Pack,
-                            Range, Reshape, Transpose)
+    from .array_ops import (
+        Concat, Fill, InvertPermutation, ListDiff, Pack, Range, Reshape,
+        Transpose
+    )
     from .data_flow_ops import BroadcastTo, DynamicStitch, Gather
 
     with self._graph.as_default_graph():
       zero_scalar_tensor = Const(value=np.asarray(0, dtype="int32")).output(0)
 
-      op, tensor_index = self._input_list[0].op, self._input_list[0].tensor_index
+      op, tensor_index = self._input_list[0].op, self._input_list[0
+                                                                 ].tensor_index
       rank_tensor = op.get_rank_tensor(tensor_index=tensor_index)
-      reshape = Reshape(input_list=[
-          self._input_list[1],
-          Const(value=np.asarray([-1], dtype="int32")).output(0)])
+      reshape = Reshape(
+          input_list=[
+              self._input_list[1],
+              Const(value=np.asarray([-1], dtype="int32")).output(0)
+          ]
+      )
       add1 = Add(input_list=[reshape.output(0), rank_tensor])
       shape_tensor = op.get_shape_tensor(tensor_index=tensor_index)
       size_tensor = shape_tensor.op.get_size_tensor(tensor_index=0)
-      range1 = Range(input_list=[
-          Const(value=np.asarray(0, dtype="int32")).output(0),
-          rank_tensor,
-          Const(value=np.asarray(1, dtype="int32")).output(0)])
+      range1 = Range(
+          input_list=[
+              Const(value=np.asarray(0, dtype="int32")).output(0), rank_tensor,
+              Const(value=np.asarray(1, dtype="int32")).output(0)
+          ]
+      )
       mod1 = FloorMod(input_list=[add1.output(0), rank_tensor])
       listdiff = ListDiff(input_list=[range1.output(0), mod1.output(0)])
-      gather = Gather(input_list=[shape_tensor, mod1.output(0), zero_scalar_tensor])
-      prod = Prod(input_list=[
-          gather.output(0),
-          Const(value=np.asarray([0], dtype="int32")).output(0)
-        ])
-      gather1 = Gather(input_list=[shape_tensor, listdiff.output(0), zero_scalar_tensor])
-      concat = Concat(input_list=[
-          Const(value=np.asarray(0, dtype="int32")).output(0),
-          mod1.output(0),
-          listdiff.output(0),
-          ])
+      gather = Gather(
+          input_list=[shape_tensor,
+                      mod1.output(0), zero_scalar_tensor]
+      )
+      prod = Prod(
+          input_list=[
+              gather.output(0),
+              Const(value=np.asarray([0], dtype="int32")).output(0)
+          ]
+      )
+      gather1 = Gather(
+          input_list=[shape_tensor,
+                      listdiff.output(0), zero_scalar_tensor]
+      )
+      concat = Concat(
+          input_list=[
+              Const(value=np.asarray(0, dtype="int32")).output(0),
+              mod1.output(0),
+              listdiff.output(0),
+          ]
+      )
       transpose = Transpose(input_list=[self._input_list[0], concat.output(0)])
       shape2_tensor = transpose.get_shape_tensor(tensor_index=0)
-      prod1 = Prod(input_list=[
-          gather1.output(0),
-          Const(value=np.asarray([0], dtype="int32")).output(0)
-        ])
+      prod1 = Prod(
+          input_list=[
+              gather1.output(0),
+              Const(value=np.asarray([0], dtype="int32")).output(0)
+          ]
+      )
       pack = Pack(axis=0, input_list=[prod.output(0), prod1.output(0)])
       reshape2 = Reshape(input_list=[transpose.output(0), pack.output(0)])
-      cumprod = Cumprod(exclusive=True, reverse=False,
-          input_list=[reshape2.output(0), Const(value=np.asarray(0, dtype="int32")).output(0)])
-      cumprod1 = Cumprod(exclusive=True, reverse=True,
-          input_list=[reshape2.output(0), Const(value=np.asarray(0, dtype="int32")).output(0)])
+      cumprod = Cumprod(
+          exclusive=True,
+          reverse=False,
+          input_list=[
+              reshape2.output(0),
+              Const(value=np.asarray(0, dtype="int32")).output(0)
+          ]
+      )
+      cumprod1 = Cumprod(
+          exclusive=True,
+          reverse=True,
+          input_list=[
+              reshape2.output(0),
+              Const(value=np.asarray(0, dtype="int32")).output(0)
+          ]
+      )
       mul = Mul(input_list=[cumprod.output(0), cumprod1.output(0)])
       reshape3 = Reshape(input_list=[mul.output(0), shape2_tensor])
       invert_perm = InvertPermutation(input_list=[concat.output(0)])
       transpose1 = Transpose(
-          input_list=[reshape3.output(0), invert_perm.output(0)]
+          input_list=[reshape3.output(0),
+                      invert_perm.output(0)]
       )
       add = Add(input_list=[size_tensor, self._input_list[1]])
       mod = FloorMod(input_list=[add.output(0), size_tensor])
-      range0 = Range(input_list=[
-        Const(value=np.asarray(0, dtype="int32")).output(0),
-        size_tensor,
-        Const(value=np.asarray(1, dtype="int32")).output(0)
-        ],
+      range0 = Range(
+          input_list=[
+              Const(value=np.asarray(0, dtype="int32")).output(0), size_tensor,
+              Const(value=np.asarray(1, dtype="int32")).output(0)
+          ],
       )
       shape1_tensor = mod.get_shape_tensor(tensor_index=0)
-      fill = Fill(input_list=[shape1_tensor, Const(value=np.asarray(1, dtype="int32")).output(0)])
+      fill = Fill(
+          input_list=[
+              shape1_tensor,
+              Const(value=np.asarray(1, dtype="int32")).output(0)
+          ]
+      )
       ds = DynamicStitch(
-          input_list=[range0.output(0), mod.output(0), shape_tensor, fill.output(0)]
+          input_list=[
+              range0.output(0),
+              mod.output(0), shape_tensor,
+              fill.output(0)
+          ]
       )
       reshape1 = Reshape(input_list=[in_grad_tensors[0], ds.output(0)])
       bt = BroadcastTo(input_list=[reshape1.output(0), shape_tensor])
@@ -721,13 +653,14 @@ class Prod(Operation, _ReductionOp):
 class MatMul(Operation):
   """Single-batch only: 2D x 2D matrix """
 
-  def __init__(self,
-               input_list,
-               graph=None,
-               transpose_x=False,
-               transpose_y=False,
-               name=None
-    ):
+  def __init__(
+      self,
+      input_list,
+      graph=None,
+      transpose_x=False,
+      transpose_y=False,
+      name=None
+  ):
     self._transpose_x = transpose_x
     self._transpose_y = transpose_y
     super(MatMul, self).__init__(graph=graph, name=name, input_list=input_list)
@@ -742,37 +675,29 @@ class MatMul(Operation):
     with self._graph.as_default_graph():
       if not self._transpose_x and not self._transpose_y:
         bp_x = MatMul(
-            input_list=in_grad_tensors+self._input_list[1:],
-            transpose_y=True
+            input_list=in_grad_tensors + self._input_list[1:], transpose_y=True
         )
         bp_y = MatMul(
-            input_list=self._input_list[:1]+in_grad_tensors,
-            transpose_x=True
+            input_list=self._input_list[:1] + in_grad_tensors, transpose_x=True
         )
       elif self._transpose_x and not self._transpose_y:
         bp_x = MatMul(
-            input_list=self._input_list[1:]+in_grad_tensors,
-            transpose_y=True
+            input_list=self._input_list[1:] + in_grad_tensors, transpose_y=True
         )
-        bp_y = MatMul(
-            input_list=self._input_list[:1]+in_grad_tensors,
-        )
+        bp_y = MatMul(input_list=self._input_list[:1] + in_grad_tensors,)
       elif not self._transpose_x and self._transpose_y:
-        bp_x = MatMul(
-            input_list=in_grad_tensors+self._input_list[1:],
-        )
+        bp_x = MatMul(input_list=in_grad_tensors + self._input_list[1:],)
         bp_y = MatMul(
-            input_list=in_grad_tensors+self._input_list[:1],
-            transpose_x=True
+            input_list=in_grad_tensors + self._input_list[:1], transpose_x=True
         )
       else:
         bp_x = MatMul(
-            input_list=self._input_list[1:]+in_grad_tensors,
+            input_list=self._input_list[1:] + in_grad_tensors,
             transpose_x=True,
             transpose_y=True,
         )
         bp_y = MatMul(
-            input_list=in_grad_tensors+self._input_list[:1],
+            input_list=in_grad_tensors + self._input_list[:1],
             transpose_x=True,
             transpose_y=True,
         )
@@ -781,10 +706,12 @@ class MatMul(Operation):
     return out_grad_tensors
 
   def _compute_shapes(self):
-    if self._input_list[0].shape.level == 0 or self._input_list[1].shape.level == 0:
+    if self._input_list[0].shape.level == 0 or self._input_list[
+        1].shape.level == 0:
       return [TensorShape([None, None])]
 
-    assert self._input_list[0].shape.ndims == self._input_list[1].shape.ndims == 2
+    assert self._input_list[0].shape.ndims == self._input_list[1
+                                                              ].shape.ndims == 2
     if self._transpose_x:
       x_shape = self._input_list[0].shape.raw_shape[::-1]
     else:
@@ -805,13 +732,13 @@ class BatchMatMul(Operation):
   """BatchMatMulV2"""
 
   def __init__(
-        self,
-        input_list,
-        graph=None,
-        transpose_x=False,
-        transpose_y=False,
-        name=None
-    ):
+      self,
+      input_list,
+      graph=None,
+      transpose_x=False,
+      transpose_y=False,
+      name=None
+  ):
     self._transpose_x = transpose_x
     self._transpose_y = transpose_y
     super(BatchMatMul, self).__init__(
@@ -833,11 +760,10 @@ class BatchMatMul(Operation):
 
     if x.ndim > y.ndim:
       x_multiples = x_multiples + [1] * (x.ndim - y.ndim)
-      y_multiples = y_multiples + list(x.shape[:x.ndim-y.ndim])
+      y_multiples = y_multiples + list(x.shape[:x.ndim - y.ndim])
     if y.ndim > x.ndim:
       y_multiples = y_multiples + [1] * (y.ndim - x.ndim)
-      x_multiples = x_multiples + list(y.shape[:y.ndim-x.ndim])
-
+      x_multiples = x_multiples + list(y.shape[:y.ndim - x.ndim])
 
     x_multiples = x_multiples[::-1] + [1, 1]
     y_multiples = y_multiples[::-1] + [1, 1]
@@ -845,14 +771,17 @@ class BatchMatMul(Operation):
     y = np.tile(y, y_multiples)
     x_flat = np.reshape(x, (-1,) + x.shape[-2:])
     y_flat = np.reshape(y, (-1,) + y.shape[-2:])
+
     def _func(index):
       index = index.item()
       return np.dot(
-        x_flat[index].T if self._transpose_x else x_flat[index],
-        y_flat[index].T if self._transpose_y else y_flat[index]
+          x_flat[index].T if self._transpose_x else x_flat[index],
+          y_flat[index].T if self._transpose_y else y_flat[index]
       )
+
     outputs = np.apply_along_axis(
-        _func, 1, np.arange(x_flat.shape[0])[:, np.newaxis]
+        _func, 1,
+        np.arange(x_flat.shape[0])[:, np.newaxis]
     )
     outputs = np.reshape(outputs, x.shape[:-2] + outputs.shape[-2:])
     return outputs
@@ -914,7 +843,6 @@ class BatchMatMul(Operation):
       shape_tensor = op_x.get_shape_tensor(tensor_index=tensor_index_x)
       shape1_tensor = op_y.get_shape_tensor(tensor_index=tensor_index_y)
 
-
       ss = StridedSlice(
           input_list=[
               shape_tensor,
@@ -932,9 +860,7 @@ class BatchMatMul(Operation):
           ]
       )
 
-      bga = BroadcastGradientArgs(
-          input_list=[ss.output(0), ss1.output(0)]
-      )
+      bga = BroadcastGradientArgs(input_list=[ss.output(0), ss1.output(0)])
 
       sum0 = Sum(input_list=[bmm.output(0), bga.output(0)])
       sum1 = Sum(input_list=[bmm1.output(0), bga.output(1)])
@@ -947,7 +873,8 @@ class BatchMatMul(Operation):
     return out_grad_tensors
 
   def _compute_shapes(self):
-    if self._input_list[0].shape.level == 0 or self._input_list[1].shape.level == 0:
+    if self._input_list[0].shape.level == 0 or self._input_list[
+        1].shape.level == 0:
       return [TensorShape(None)]
 
     x_shape = self._input_list[0].shape.raw_shape
@@ -973,20 +900,22 @@ class BatchMatMul(Operation):
         shape.append(None)
 
     if len(x_shape) < len(y_shape):
-      shape = list(y_shape[:-2-len(shape)]) + shape[::-1]
+      shape = list(y_shape[:-2 - len(shape)]) + shape[::-1]
     else:
-      shape = list(x_shape[:-2-len(shape)]) + shape[::-1]
+      shape = list(x_shape[:-2 - len(shape)]) + shape[::-1]
 
     x_slice_shape = x_shape[-2:][::-1] if self._transpose_x else x_shape[-2:]
     y_slice_shape = y_shape[-2:][::-1] if self._transpose_y else y_shape[-2:]
 
-    assert x_slice_shape[1] is None or y_slice_shape[0] is None or x_slice_shape[1] == y_slice_shape[0]
+    assert x_slice_shape[1] is None or y_slice_shape[
+        0] is None or x_slice_shape[1] == y_slice_shape[0]
 
     shape = shape + [x_slice_shape[0], y_slice_shape[1]]
     return [TensorShape(shape)]
 
 
 class SquaredDifference(Operation, _BinaryOp):
+
   def _run(self, x, y):
     outputs = np.square(x - y)
     return outputs
@@ -1012,27 +941,20 @@ class SquaredDifference(Operation, _BinaryOp):
 
       sub = Sub(input_list=[self._input_list[0], self._input_list[1]])
       mul1 = Mul(input_list=[mul.output(0), sub.output(0)])
-      bga = BroadcastGradientArgs(
-          input_list=[shape_tensor, shape1_tensor]
-      )
+      bga = BroadcastGradientArgs(input_list=[shape_tensor, shape1_tensor])
 
-      sum0 = Sum(
-          input_list=[mul1.output(0), bga.output(0)]
-      )
-      sum1 = Sum(
-          input_list=[mul1.output(0), bga.output(1)]
-      )
+      sum0 = Sum(input_list=[mul1.output(0), bga.output(0)])
+      sum1 = Sum(input_list=[mul1.output(0), bga.output(1)])
 
-      bp_x = Reshape(
-          input_list=[sum0.output(0), shape_tensor]
+      bp_x = Reshape(input_list=[sum0.output(0), shape_tensor])
+      bp_y = Neg(
+          input_list=[
+              Reshape(input_list=[sum1.output(0), shape1_tensor]).output(0)
+          ]
       )
-      bp_y = Neg(input_list=[Reshape(
-          input_list=[sum1.output(0), shape1_tensor]
-      ).output(0)])
       out_grad_tensors = [bp_x.output(0), bp_y.output(0)]
 
     return out_grad_tensors
-
 
 
 class Square(Operation, _ShapeAsIs):
@@ -1100,14 +1022,7 @@ class NotEqual(Operation, _BinaryOp):
 
 class Cumsum(Operation):
 
-  def __init__(
-      self,
-      reverse,
-      exclusive,
-      input_list,
-      graph=None,
-      name=None
-    ):
+  def __init__(self, reverse, exclusive, input_list, graph=None, name=None):
     super(Cumsum, self).__init__(graph=graph, input_list=input_list, name=name)
     self._exclusive = exclusive
     self._reverse = reverse
@@ -1132,9 +1047,9 @@ class Cumsum(Operation):
   def _grad_func(self, in_grad_tensors):
     with self._graph.as_default_graph():
       bp_inputs = Cumsum(
-        reverse=not self._reverse,
-        exclusive=self._exclusive,
-        input_list=[in_grad_tensors[0], self._input_list[1]],
+          reverse=not self._reverse,
+          exclusive=self._exclusive,
+          input_list=[in_grad_tensors[0], self._input_list[1]],
       )
       out_grad_tensors = [bp_inputs.output(0)]
 
@@ -1149,14 +1064,7 @@ class Cumsum(Operation):
 
 class Cumprod(Operation):
 
-  def __init__(
-      self,
-      reverse,
-      exclusive,
-      input_list,
-      graph=None,
-      name=None
-    ):
+  def __init__(self, reverse, exclusive, input_list, graph=None, name=None):
     super(Cumprod, self).__init__(graph=graph, input_list=input_list, name=name)
     self._exclusive = exclusive
     self._reverse = reverse
@@ -1186,17 +1094,13 @@ class Cumprod(Operation):
           exclusive=self._exclusive,
           input_list=self._input_list,
       )
-      mul = Mul(
-          input_list=[in_grad_tensors[0], prod.output(0)]
-      )
+      mul = Mul(input_list=[in_grad_tensors[0], prod.output(0)])
       cum0 = Cumsum(
           reverse=not self._reverse,
           exclusive=self._exclusive,
           input_list=[mul.output(0), self._input_list[1]],
       )
-      bp_inputs = DivNoNan(
-          input_list=[cum0.output(0), self._input_list[0]]
-      )
+      bp_inputs = DivNoNan(input_list=[cum0.output(0), self._input_list[0]])
       out_grad_tensors = [bp_inputs.output(0)]
 
     return out_grad_tensors
@@ -1245,6 +1149,7 @@ class Log1p(Operation, _ShapeAsIs):
 
 
 class Log(Operation, _ShapeAsIs):
+
   def _run(self, inputs):
     outputs = np.log(inputs)
     return outputs
@@ -1266,7 +1171,9 @@ class Reciprocal(Operation, _ShapeAsIs):
 
   def _grad_func(self, in_grad_tensors):
     with self._graph.as_default_graph():
-      bp_inputs = ReciprocalGrad(input_list=[self.output(0), in_grad_tensors[0]])
+      bp_inputs = ReciprocalGrad(
+          input_list=[self.output(0), in_grad_tensors[0]]
+      )
       out_grad_tensors = [bp_inputs.output(0)]
 
     return out_grad_tensors
@@ -1281,7 +1188,10 @@ class ReciprocalGrad(Operation, _PickFirstAmongCompatibleShapes):
   def _grad_func(self, in_grad_tensors):
     with self._graph.as_default_graph():
       mul = Mul(
-          input_list=[in_grad_tensors[0], Const(value=np.asarray(-2, dtype="float32")).output(0)]
+          input_list=[
+              in_grad_tensors[0],
+              Const(value=np.asarray(-2, dtype="float32")).output(0)
+          ]
       )
       mul1 = Mul(input_list=[mul.output(0), self._input_list[1]])
       bp_outputs = Mul(input_list=[mul1.output(0), self._input_list[0]])
@@ -1294,6 +1204,7 @@ class ReciprocalGrad(Operation, _PickFirstAmongCompatibleShapes):
 
 
 class Rsqrt(Operation, _ShapeAsIs):
+
   def _run(self, inputs):
     outputs = 1 / np.sqrt(inputs)
     return outputs
@@ -1327,6 +1238,7 @@ class RsqrtGrad(Operation, _ShapeAsIs):
 
 
 class Sqrt(Operation, _ShapeAsIs):
+
   def _run(self, inputs):
     outputs = np.sqrt(inputs)
     return outputs
@@ -1350,7 +1262,10 @@ class SqrtGrad(Operation, _ShapeAsIs):
       div = RealDiv(input_list=[in_grad_tensors[0], self._input_list[0]])
       neg = Neg(input_list=[div.output(0)])
       bp_outputs = Mul(input_list=[neg.output(0), self.output(0)])
-      bp_grads = Mul(input_list=[Const(value=np.asarray(0.5)).output(0), div.output(0)])
+      bp_grads = Mul(
+          input_list=[Const(value=np.asarray(0.5)).output(0),
+                      div.output(0)]
+      )
       out_grad_tensors = [bp_outputs.output(0), bp_grads.output(0)]
 
     return out_grad_tensors
