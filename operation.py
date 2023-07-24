@@ -1,4 +1,4 @@
-"""Defines base class `Operation` for all Ops and some generic Op types."""
+"""Defines base class `Operation` for all Ops."""
 from collections import defaultdict
 
 import numpy as np
@@ -7,8 +7,7 @@ from .containers import get_default_graph
 
 
 class Operation(object):
-  """
-  """
+  """Base class for all Ops."""
 
   def __init__(self, graph=None, input_list=[], dependent_ops=[], name=None):
     """Constructor.
@@ -90,9 +89,12 @@ class Operation(object):
     while len(queue):
       op = queue.pop(0)
       for bp_index in op._bp_indices:
+        # `tensor` is an input of `op` that expects a backpropped gradient
         tensor = op._input_list[bp_index]
         if tensor.op.id not in expected_backprops:
           expected_backprops[tensor.op.id] = defaultdict(set)
+        # record the set of IDs of Ops that will backprop gradients to `tensor`
+        # (can be uniquely identified by `op.id` and `tensor_index`)
         expected_backprops[tensor.op.id][tensor.tensor_index].add(op.id)
         queue.append(tensor.op)
 
@@ -107,20 +109,18 @@ class Operation(object):
         this Op. If None, defaults to tensor filled with ones.
 
     Returns:
-      dx_tensors (List[Tensor]):
+      dx_tensors (List[Tensor]): List of gradient tensors backpropped to each
+        tensor in `x_tensors`.
     """
     from .generic_ops import OnesLike
     from .math_ops import AddN
 
+    # if `dy_tensors` is not provided, defaults to all-one-tensors
     if dy_tensors is None:
       dy_tensors = [
           OnesLike(input_list=[y_tensor]).output(0)
           for y_tensor in self._outputs
       ]
-    else:
-      assert len(self._outputs) == len(dy_tensors)
-      for y_tensor, dy_tensor in zip(self._outputs, dy_tensors):
-        assert y_tensor.shape._compatible_with(dy_tensor.shape)
 
     cum_grad = dict()
     expected_backprops = self._compute_expected_backprops()
@@ -133,12 +133,18 @@ class Operation(object):
       if not hasattr(op, "_grad_func"):
         continue
 
+      # make sure `dy_tensors` matches the output tensors of `op`
+      assert len(op._outputs) == len(dy_tensors)
+      for y_tensor, dy_tensor in zip(op._outputs, dy_tensors):
+        assert y_tensor.shape._compatible_with(dy_tensor.shape)
+
       for tensor, grad_tensor in zip(
           # list of input tensors to `op`
           [op._input_list[bp_index] for bp_index in op._bp_indices],
           # list of computed gradient tensors w.r.t. input tensors to `op`
-          op._grad_func(dy_tensors)
+          op._grad_func(dy_tensors),
       ):
+        assert tensor.shape._compatible_with(grad_tensor.shape)
 
         if tensor.op.id not in cum_grad:
           cum_grad[tensor.op.id] = defaultdict(list)
@@ -154,7 +160,7 @@ class Operation(object):
             if len(cum_grad[tensor.op.id][tensor_index]) > 1:
               grad_tensor = AddN(
                   input_list=cum_grad[tensor.op.id][tensor_index],
-                  graph=self._graph
+                  graph=self._graph,
               ).output(0)
             else:
               grad_tensor = cum_grad[tensor.op.id][tensor_index][0]
@@ -190,6 +196,10 @@ class Operation(object):
   def mutable(self):
     return False
 
+  @property
+  def graph(self):
+    return self._graph
+
   def _create_output_tensors(self):
     """Set attribute `self._outputs` as the created tensors.
 
@@ -212,6 +222,14 @@ class Operation(object):
     return self._outputs
 
   def output(self, index=0):
+    """Get one output tensor.
+
+    Args:
+      index (int): output index of the tensor. Defaults to 0.
+
+    Returns:
+      output_tensor (Tensor): the tensor with the provided output index.
+    """
     output_tensor = self._create_output_tensors()[index]
     return output_tensor
 
@@ -234,31 +252,31 @@ class Operation(object):
     """
     from .generic_ops import Shape
     return self._get_dependent_tensor(
-        Shape, self.name + "_Shape", self._graph._shape_tensors, tensor_index
+        Shape, self.name + "_Shape", self._graph._shape_tensors, tensor_index,
     )
 
   def get_size_tensor(self, tensor_index=0):
     from .generic_ops import Size
     return self._get_dependent_tensor(
-        Size, self.name + "_Size", self._graph._size_tensors, tensor_index
+        Size, self.name + "_Size", self._graph._size_tensors, tensor_index,
     )
 
   def get_rank_tensor(self, tensor_index=0):
     from .generic_ops import Rank
     return self._get_dependent_tensor(
-        Rank, self.name + "_Rank", self._graph._rank_tensors, tensor_index
+        Rank, self.name + "_Rank", self._graph._rank_tensors, tensor_index,
     )
 
   def get_zeros_tensor(self, tensor_index=0):
     from .generic_ops import ZerosLike
     return self._get_dependent_tensor(
         ZerosLike, self.name + "_ZerosLike", self._graph._zeroslike_tensors,
-        tensor_index
+        tensor_index,
     )
 
   def get_ones_tensor(self, tensor_index=0):
     from .generic_ops import OnesLike
     return self._get_dependent_tensor(
         OnesLike, self.name + "_OnesLike", self._graph._oneslike_tensors,
-        tensor_index
+        tensor_index,
     )

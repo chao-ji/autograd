@@ -1,15 +1,18 @@
-# NumPy-based Framework for Automatic Differentiation
+# AutoGrad: NumPy-based Framework for Automatic Differentiation
 
 
 ## Introduction
 
-This is a project that I've been contemplating over the years but not able to finish until recently (mid 2023). The motivation was to demystify how backprogagation algorithm works in machine learning libriries like TensorFlow, and the basic idea is to try to build a "mini" framework from the ground up based on the general principles of differentiation and the chain rule of derivatives. I chose to implement only the core components while making the framework expressive enough so that it can be used to build common neural network architectures, which can be traind on toy datasets in a reasonable amount of time.
+This is a project that I've been contemplating over the years but not able to finish until just recently (mid 2023). The motivation was to demystify how backpropagation algorithm works in machine learning libriries like TensorFlow, which allows you to take a differentiable computational graph and efficiently compute the gradients (first or higher order). The basic idea is to try to build a "mini" framework from the ground up based on the general principles of differentiation and the chain rule of derivatives. By "mini" I mean I try to keep the implementation as minimal as possible by focusing on components that are necessary for defining the graph and computing gradients, so that the codebase is relatively easy to understand. That said, the set of Operations is still reasonably expressive (support math, neural network, nd-array, and data flow operations), which allows you to build common model architectures and can be tested on standard benchmark datasets like MNIST.
+
 
 ## Design
 
+This section briefly discusses the implementation details. Proceed to **Usage** if not interested.
+
 ### Graph, Operations and Tensors
 
-Generally, running a typical deep learning model comes down to two stages:
+Generally speaking, running a typical machine learning model comes down to two stages:
 
 1. Symbolically describe the computational process as a directed graph (graph construction time).
 2. Carry out the computation by "executing" the graph built in the first stage (runtime).
@@ -27,27 +30,208 @@ Once we are done with building the graph, we can carry out the computation defin
 
 To "carry out the computation" simply means to execute a specify Op in the graph. Let's say we'd like to execute the `Add` Op `e`, which adds the input Tensors `c:0` and `d:0`, which are recursively computed by the `Pack` Op `c` and `Exp` Op `d`, and eventually trace back to the two "leaf" Ops `a` and `b`.
 
+
+<p align="center">
+  <img src="g3doc/files/fig1.png" width="400">
+  <br>
+  <br>
+  Example of a computational graph.
+</p>
+
 ### Runtime
 
-As we just showed, the execution of an Op requires the concrete values (numpy array) of upstream Ops. So we need to temporily store the values of Tensors in an environment called `Runtime`, so that downstream Ops can either invoke the execution of upstream Ops or simply look up the values of the output Tensors. Basically, a `Runtime` is a dictionary that maps the ID of tensors to their values.
+As we just showed, the execution of an Op requires the concrete values (numpy array) of upstream Ops. So we need to temporily store the values of Tensors in an environment called `Runtime`, so that downstream Ops can either invoke the execution of upstream Ops or simply look up the values of the output Tensors. Essentially, a `Runtime` is a dictionary that maps the ID of tensors to their values.
 
 ### Backpropagation
 
-For an Op that has `m` inputs and generates `n` outputs, it is expected to receive `n` gradient Tensors from its downstream Ops. A `_grad_func` is defined for each Op that takes the `m` input and `n` gradient Tensors (or a subset of them), and adds additional Ops (Gradient Graph) that lead to the gradient tensors to be backpropagated to each of the `m` inputs.
+For an Op that has `m` inputs and generates `n` outputs, it is expected to receive `n` gradient Tensors from its downstream Ops. A `_grad_func` is defined for each Op that takes the `m` input and `n` gradient Tensors (or a subset of them), and adds additional Ops to the graph that computes the gradient tensors. For example, in the following digram, the blue circle on the left represents a single `Operation` with `m` inputs and `n` outputs, and the pink circle on the right represent a "subgraph: containing potentially multiple `Operation`s that eventually leads to gradient tensor with respect to each of the `m` input tensors.
 
+<p align="center">
+  <img src="g3doc/files/fig2.png" width="400">
+  <br>
+  <br>
+  Generating a subgraph containing Ops that lead to the computed gradient tensors.
+</p>
 
-### Example
+If a Tensor is consumed by more than one downstream Op, a gradient tensor will be backpropped from each of the downstream, and the total gradient is the sum of these gradient tensors, which is computed by the `AddN` Op.
 
+<p align="center">
+  <img src="g3doc/files/fig4.png" width="400">
+  <br>
+  <br>
+  Add up backpropped gradient tensors to compute the full gradient
+</p>
 
+The following is an example of computing gradients (and gradients or gradients) of a graph. First, the three blue circles represent the graph of three Ops, which simply computes the dot product of two tensors `A` and `B` of shape `[2, 3]` and `[3, 5]`, respectively. Second, the two pink circles represent the graph with additional Ops, computing the gradient of `C` with respect to `A`, i.e. `Grad(C, A)`. Finnlya, we further add two Ops (yellow) to compute the gradient of `Grad(C, A)` withe respect to `B`, i.e. `Grad(Grad(C, A), B)`.
 
+<p align="center">
+  <img src="g3doc/files/fig3.png" width="400">
+  <br>
+  <br>
+  Higher order gradient
+</p>
+
+## Codebase
+
+The entire codebase is distributed into the following files
+* `operation.py`: Defines the base class for all `Operation`s
+* `tensor.py`: Defines the `Tensor` class
+* `tensor_shape.py`: Defines `TensorShape` class
+* `containers.py`: Defines `Graph` and `Runtime` classes
+* `math_ops.py`, `array_ops.py`, `generic_ops.py`, `data_flow_ops.py`, `nn_ops.py`, `random_ops.py`, `resource_ops.py`: Defines `Operation`s in different categories.
+* `default_stack.py`: Defines the global default graph
+
+On top of the above files, the following files provide interfaces for higher level abstractions (e.g. layers, optimizers)
+
+* `wrappers.py`: Define wrapper functions for creating raw `Operation`s
+* `layers.py`: Define common neural network layers
+* `optimizers.py`: Define optimization algorithms for updating weights
+* `initializers.py`: Define common initialization algorithms
+* `mixins`: Define mix-in classes for `Operation`s
 
 ## Usage
 
+### Installation
 
-## Example
+Just clone this repository
+```
+git clone git@github.com:chao-ji/autograd.git /path_to_autograd/autograd
+```
+
+then add parent directory of `/path_to_autograd` to the list of python search paths
+
+```
+PYTHONPATH=$PYTHONPATH:/path_to_autograd
+```
+
+Start a python interactive shell and run `import autograd as ag` to make sure if installation is successful.
 
 
-## TODO
+### Graph and Runtime
+Any `Operation`s is defined in a specific `Graph` object.
+
+There are two ways to define a `Graph`. The first is to assume there is an implicit *default* graph.
+
+```python
+import autograd as ag
+
+# `a`, `b`, `c` are `Tensor` objects
+# `a.op` (and `b.op`, `c.op`) are their parent `Operation`s
+
+# Upon creating `a`, a default graph is implicitly created
+a = ag.placeholder(shape=[1, 3])
+b = ag.placeholder(shape=[1, 3])
+c = a + b # or ag.add(a, b)
+
+# retrieve the implicitly created graph
+graph = ag.get_default_graph()
+
+assert a.op.graph == graph
+assert b.op.graph == graph
+assert c.op.graph == graph
+```
+
+The second is to create a graph explicitly and define Ops in a context.
+
+```python
+graph = ag.Graph()
+with graph.as_default_graph():
+  a = ag.placeholder(shape=[1, 3])
+  b = ag.placeholder(shape=[1, 3])
+  c = a + b
+
+# `graph` is now removed and `graph2` is a different graph
+graph2 = ag.get_default_graph()
+
+assert a.op.graph == graph
+assert a.op.graph != graph2
+```
+
+`Runtime` is an environment that holds the actual values of `Tensors` and simulates the running of a `Graph`. In a sense, `Graph` is like a **compiled executable**, while `Runtime` is like a **running process** of a `Graph`.
+
+```python
+graph = ag.Graph()
+
+# `Runtime` is implicitly created when a `Graph` is created.
+runtime = graph.runtime
+
+with graph.as_default_graph():
+  a = ag.placeholder(shape=[1, 3])
+  b = ag.placeholder(shape=[1, 3])
+  c = a + b
+
+# We use `Runtime` object to set `Placeholder` values and get the value of the result `Tensor`.
+
+import numpy as np
+runtime.set_placeholder_value(a.op.id, np.arange(3).reshape(1, 3))
+runtime.set_placeholder_value(b.op.id, np.ones((1, 3)))
+
+print(runtime.get_tensor_value(c))
+# output: array([[1., 2., 3.]])
+
+# call `reset()` to reset the values of all tensors in a graph, so we can feed new values to `Placeholder`s and re-run the graph.
+runtime.reset()
+```
 
 
-## Acknowledgement
+
+
+### Backpropagation
+
+To backprop gradient from a tensor `t` to any other tensor `s`, where there is "differentiable path" from `s` to `t`, call
+
+```python
+# `grads` is a list holding a Tensor of the same shape as `s`
+grads = t.backprop(x_tensors=[s])
+```
+The gradient defaults to a tensor of the same shape as `t` and filled with ones.
+
+You can also provide specific values of the the backpropped gradient by calling
+
+```python
+t_backward_value = ag.ones_like(t) # `t_backward_value` is the backpropped gradient
+grads = t.backprop(x_tensors=[s], dy_tensor=t_backward_value)
+```
+
+
+The following is example of computing higher order gradients.
+
+```python
+import autograd as ag
+import numpy as np
+
+# a.shape: (2, 3)
+a = ag.constant(np.arange(0, 6).astype("float32").reshape(2, 3))
+# b.shape: (3, 5)
+b = ag.constant(np.arange(0, 15).astype("float32").reshape(3, 5))
+# c.shape: (2, 5)
+c = ag.matmul(a, b)
+
+# Backprop gradient of `c` (defaults to ag.ones((2, 5))) to `a`
+# grads[0]: [<Tensor 'MatMul_1:0', shape=(2, 3)>]
+grads = c.backprop([a])
+
+# Backprop gradient of `grads[0]` (defaults to ag.ones((2, 3))) to `b`
+# grads_grads: [<Tensor 'MatMul_4:0', shape=(3, 5)>]
+grads_grads = grads[0].backprop([b])
+
+runtime = ag.get_default_graph().runtime
+
+print(runtime.get_tensor_value(grads[0]))
+#array([[10., 35., 60.],
+#       [10., 35., 60.]], dtype=float32)
+
+print(runtime.get_tensor_value(grads_grads[0]))
+# array([[2., 2., 2., 2., 2.],
+#        [2., 2., 2., 2., 2.],
+#        [2., 2., 2., 2., 2.]], dtype=float32)
+```
+
+## Examples
+The following are examples of building and training some common discriminative and generative models.
+
+* [Spiral dataset](demos/spiral_dataset.py)
+* [Logistic Regression](demos/logistic_regression.py)
+* [Image classification](demos/convnet.py)
+* [Generative Adversarial Network](demos/wgan_gp.py)
+* [Variational Autoencoder](demos/vae.py)

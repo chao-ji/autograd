@@ -1,3 +1,4 @@
+"""Generic Operation types."""
 import numpy as np
 
 from .mixins import _ScalarShape, _ShapeAsIs

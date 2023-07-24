@@ -6,17 +6,17 @@ from .generic_ops import Const
 from .initializers import (
     GlorotNormalInitializer, GlorotUniformInitializer, HeNormalInitializer,
     HeUniformInitializer, OnesInitializer, RandomUniformInitializer,
-    TruncatedNormalInitializer, ZerosInitializer
+    TruncatedNormalInitializer, ZerosInitializer,
 )
 from .math_ops import Add
-from .nn_ops import LeakyRelu, Relu, Sigmoid, Tanh
 from .resource_ops import AddToVariable, CreateVariable, ReadVariable
+from .wrappers import relu, tanh, sigmoid, leaky_relu
 
 ACTIVATIONS = {
-    "relu": Relu,
-    "tanh": Tanh,
-    "sigmoid": Sigmoid,
-    "leaky_relu": LeakyRelu
+    "relu": relu,
+    "tanh": tanh,
+    "sigmoid": sigmoid,
+    "leaky_relu": leaky_relu,
 }
 
 INITIALIZERS = {
@@ -35,8 +35,30 @@ Variable = namedtuple("Variable", ["weight", "handle", "trainable"])
 
 class Layer(object):
 
-  def __init__(self):
+  def __init__(
+      self, activation=None, kernel_initializer=None, bias_initializer=None,
+  ):
     self._variables = []
+    if callable(activation):
+      self._activation = activation
+    elif isinstance(activation, str):
+      self._activation = ACTIVATIONS[activation]
+    else:
+      self._activation = None
+
+    if callable(kernel_initializer):
+      self._kernel_initializer = kernel_initializer
+    elif isinstance(kernel_initializer, str):
+      self._kernel_initializer = INITIALIZERS[kernel_initializer]()
+    else:
+      self._kernel_initializer = None
+
+    if callable(bias_initializer):
+      self._bias_initializer = bias_initializer
+    elif isinstance(bias_initializer, str):
+      self._bias_initializer = INITIALIZERS[bias_initializer]()
+    else:
+      self._bias_initializer = None
 
   @property
   def variables(self):
@@ -47,14 +69,15 @@ class Layer(object):
     return self._variables
 
   def get_variable_weight(self, index):
+    assert index in self._variables
     runtime = self._variables[index].weight.op._graph._runtime
     return runtime.get_variable_value(
-        runtime.get_tensor_value(self._variables[index].handle).item().id
+        runtime.get_tensor_value(self._variables[index].handle).item().id,
     )
 
   def _build(self, shape_list, init_fn_list, flag_list, trainable_list):
     for shape, init_fn, flag, trainable in zip(
-        shape_list, init_fn_list, flag_list, trainable_list
+        shape_list, init_fn_list, flag_list, trainable_list,
     ):
       if not flag:
         continue
@@ -68,9 +91,32 @@ class Layer(object):
 
       self._variables.append(
           Variable(
-              weight=read_var, handle=create_var.output(0), trainable=trainable
-          )
+              weight=read_var, handle=create_var.output(0), trainable=trainable,
+          ),
       )
+
+  def save_variable_weights(self, filename):
+    assert len(self.variables) > 0
+    runtime = self.variables[0].weight.op._graph._runtime
+    vids = [
+        runtime.get_tensor_value(v.handle).item().id for v in self.variables
+    ]
+    variable_values = np.asarray(
+        [
+            runtime.get_variable_value(vid) for vid in vids
+        ],
+                                     dtype="object",
+    )
+    return variable_values
+
+  def load_variable_weights(self, filename):
+    weights = np.load(filename, allow_pickle=True)
+    assert len(weights) == len(self.variables)
+
+    runtime = self.variables[0].weight.op._graph._runtime
+    for i, v in enumerate(self.variables):
+      vid = runtime.get_tensor_value(v.handle).item().id
+      runtime.set_variable_value(vid, weights[i])
 
 
 class Dense(Layer):
@@ -82,16 +128,13 @@ class Dense(Layer):
       use_bias=True,
       kernel_initializer="glorot_uniform",
       bias_initializer="zeros",
-      kernel_init_params={},
   ):
-    super(Dense, self).__init__()
+    super(
+        Dense,
+        self,
+    ).__init__(activation, kernel_initializer, bias_initializer)
     self._units = units
-    self._activation = activation
     self._use_bias = use_bias
-    self._kernel_initializer = INITIALIZERS[kernel_initializer](
-        **kernel_init_params
-    )
-    self._bias_initializer = INITIALIZERS[bias_initializer]()
 
   def build(self, input_shape):
     if not len(self._variables):
@@ -100,7 +143,7 @@ class Dense(Layer):
       shape_list = [[in_channels, self._units], [self._units]]
       init_fn_list = [
           lambda shape: self._kernel_initializer(shape),
-          lambda shape: self._bias_initializer(shape)
+          lambda shape: self._bias_initializer(shape),
       ]
       flag_list = [True, self._use_bias]
       trainable_list = [True] * 2
@@ -117,7 +160,7 @@ class Dense(Layer):
       bias = self._variables[1].weight
       outputs = Add(input_list=[outputs, bias]).output(0)
     if self._activation:
-      outputs = ACTIVATIONS[self._activation](input_list=[outputs]).output(0)
+      outputs = self._activation(outputs)
     return outputs
 
 
@@ -133,19 +176,16 @@ class Conv2D(Layer):
       use_bias=True,
       kernel_initializer="glorot_uniform",
       bias_initializer="zeros",
-      kernel_init_params={},
   ):
-    super(Conv2D, self).__init__()
+    super(
+        Conv2D,
+        self,
+    ).__init__(activation, kernel_initializer, bias_initializer)
     self._filters = filters
     self._kernel_size = kernel_size
     self._strides = strides
     self._padding = padding
-    self._activation = activation
     self._use_bias = use_bias
-    self._kernel_initializer = INITIALIZERS[kernel_initializer](
-        **kernel_init_params
-    )
-    self._bias_initializer = INITIALIZERS[bias_initializer]()
 
   def build(self, input_shape):
     if not len(self._variables):
@@ -154,7 +194,7 @@ class Conv2D(Layer):
       shape_list = [filters_shape, [self._filters]]
       init_fn_list = [
           lambda shape: self._kernel_initializer(shape),
-          lambda shape: self._bias_initializer(shape)
+          lambda shape: self._bias_initializer(shape),
       ]
       flag_list = [True, self._use_bias]
       trainable_list = [True] * 2
@@ -168,13 +208,13 @@ class Conv2D(Layer):
     outputs = Conv2dOp(
         input_list=[inputs, filters],
         strides=self._strides,
-        padding=self._padding
+        padding=self._padding,
     ).output(0)
     if self._use_bias:
       bias = self._variables[1].weight
       outputs = Add(input_list=[outputs, bias]).output(0)
     if self._activation:
-      outputs = ACTIVATIONS[self._activation](input_list=[outputs]).output(0)
+      outputs = self._activation(outputs)
     return outputs
 
 
@@ -191,20 +231,17 @@ class Conv2DTranspose(Layer):
       outputs_shape=None,
       kernel_initializer="glorot_uniform",
       bias_initializer="zeros",
-      kernel_init_params={},
   ):
-    super(Conv2DTranspose, self).__init__()
+    super(
+        Conv2DTranspose,
+        self,
+    ).__init__(activation, kernel_initializer, bias_initializer)
     self._filters = filters
     self._kernel_size = kernel_size
     self._strides = strides
     self._padding = padding
-    self._activation = activation
     self._use_bias = use_bias
     self._outputs_shape = outputs_shape
-    self._kernel_initializer = INITIALIZERS[kernel_initializer](
-        **kernel_init_params
-    )
-    self._bias_initializer = INITIALIZERS[bias_initializer]()
 
   def build(self, input_shape):
 
@@ -214,7 +251,7 @@ class Conv2DTranspose(Layer):
       shape_list = [filters_shape, [self._filters]]
       init_fn_list = [
           lambda shape: self._kernel_initializer(shape),
-          lambda shape: self._bias_initializer(shape)
+          lambda shape: self._bias_initializer(shape),
       ]
       flag_list = [True, self._use_bias]
       trainable_list = [True] * 2
@@ -234,30 +271,32 @@ class Conv2DTranspose(Layer):
     filters = self._variables[0].weight
 
     out_height = self._infer_spatial_size(
-        inputs.shape.raw_shape[1], self._kernel_size[0], self._strides[0]
+        inputs.shape.raw_shape[1], self._kernel_size[0], self._strides[0],
     )
     out_width = self._infer_spatial_size(
-        inputs.shape.raw_shape[2], self._kernel_size[1], self._strides[1]
+        inputs.shape.raw_shape[2], self._kernel_size[1], self._strides[1],
     )
 
     if self._outputs_shape is None:
       outputs_shape = inputs.shape.raw_shape[
-          0], out_height, out_width, self._filters
+          0
+      ], out_height, out_width, self._filters
     else:
       outputs_shape = self._outputs_shape
-    outputs_shape = Const(value=np.asarray(outputs_shape, dtype="int32")
-                         ).output(0)
+    outputs_shape = Const(
+        value=np.asarray(outputs_shape, dtype="int32"),
+    ).output(0)
 
     outputs = Conv2DBackpropInput(
         input_list=[filters, inputs, outputs_shape],
         strides=self._strides,
-        padding=self._padding
+        padding=self._padding,
     ).output(0)
     if self._use_bias:
       bias = self._variables[1].weight
       outputs = Add(input_list=[outputs, bias]).output(0)
     if self._activation:
-      outputs = ACTIVATIONS[self._activation](input_list=[outputs]).output(0)
+      outputs = self._activation(outputs)
     return outputs
 
 
@@ -280,8 +319,9 @@ class BatchNormalization(Layer):
     self._beta_initializer = INITIALIZERS[beta_initializer]()
     self._gamma_initializer = INITIALIZERS[gamma_initializer]()
     self._moving_mean_initializer = INITIALIZERS[moving_mean_initializer]()
-    self._moving_variance_initializer = INITIALIZERS[moving_variance_initializer
-                                                    ]()
+    self._moving_variance_initializer = INITIALIZERS[
+        moving_variance_initializer
+    ]()
 
   def build(self, input_shape):
     if not len(self._variables):
@@ -293,7 +333,7 @@ class BatchNormalization(Layer):
           lambda shape: self._beta_initializer(shape),
           lambda shape: self._gamma_initializer(shape),
           lambda shape: self._moving_mean_initializer(shape),
-          lambda shape: self._moving_variance_initializer(shape)
+          lambda shape: self._moving_variance_initializer(shape),
       ]
       flag_list = [True] * 4
       trainable_list = [True] * 2 + [False] * 2
@@ -318,32 +358,35 @@ class BatchNormalization(Layer):
       mean = Mean(input_list=[inputs, axis]).output(0)
       variance = Mean(
           input_list=[
-              SquaredDifference(input_list=[inputs, mean]).output(0), axis
-          ]
+              SquaredDifference(input_list=[inputs, mean]).output(0), axis,
+          ],
       ).output(0)
 
       # update moving mean and variance
       moving_mean = self._variables[2].weight
       moving_variance = self._variables[3].weight
 
-      const = Const(value=np.asarray(1 - self._momentum, dtype="float32")
-                   ).output(0)
+      const = Const(
+          value=np.asarray(1 - self._momentum, dtype="float32"),
+      ).output(0)
       delta_moving_mean = Mul(
-          input_list=[const,
-                      Sub(input_list=[mean, moving_mean]).output(0)]
+          input_list=[
+              const,
+              Sub(input_list=[mean, moving_mean]).output(0),
+          ],
       ).output(0)
       delta_moving_variance = Mul(
           input_list=[
               const,
-              Sub(input_list=[variance, moving_variance]).output(0)
-          ]
+              Sub(input_list=[variance, moving_variance]).output(0),
+          ],
       ).output(0)
 
       update_moving_mean = AddToVariable(
-          input_list=[self._variables[2].handle, delta_moving_mean]
+          input_list=[self._variables[2].handle, delta_moving_mean],
       )
       update_moving_variance = AddToVariable(
-          input_list=[self._variables[3].handle, delta_moving_variance]
+          input_list=[self._variables[3].handle, delta_moving_variance],
       )
 
     else:
@@ -365,7 +408,7 @@ class BatchNormalization(Layer):
       outputs = Identity(
           input_list=[outputs],
           # make sure moving mean and variances are updated
-          dependent_ops=[update_moving_mean, update_moving_variance]
+          dependent_ops=[update_moving_mean, update_moving_variance],
       ).output(0)
 
     return outputs
