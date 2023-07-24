@@ -62,7 +62,7 @@ If a Tensor is consumed by more than one downstream Op, a gradient tensor will b
   Add up backpropped gradient tensors to compute the full gradient
 </p>
 
-The following is an example of computing gradients (and gradients or gradients) of a graph. First, the three blue circles represent the graph of three Ops, which simply computes the dot product of two tensors `A` and `B` of shape `[2, 3]` and `[3, 5]`, respectively. Second, the two pink circles represent the graph with additional Ops, computing the gradient of `C` with respect to `A`, i.e. `Grad(C, A)`. Finnlya, we further add two Ops (yellow) to compute the gradient of `Grad(C, A)` withe respect to `B`, i.e. `Grad(Grad(C, A), B)`.
+The following is an example of computing gradients (and gradients or gradients) of a graph. First, the three blue circles represent the graph of three Ops, which simply computes the dot product of two tensors `A` and `B` of shape `[2, 3]` and `[3, 5]`, respectively. Second, the two pink circles represent the graph with additional Ops, computing the gradient of `C` with respect to `A`, i.e. `Grad(C, A)`. Finally, we further add two Ops (yellow) to compute the gradient of `Grad(C, A)` withe respect to `B`, i.e. `Grad(Grad(C, A), B)`.
 
 <p align="center">
   <img src="g3doc/files/fig3.png" width="400">
@@ -147,7 +147,7 @@ assert a.op.graph == graph
 assert a.op.graph != graph2
 ```
 
-`Runtime` is an environment that holds the actual values of `Tensors` and simulates the running of a `Graph`. In a sense, `Graph` is like a **compiled executable**, while `Runtime` is like a **running process** of a `Graph`.
+`Runtime` is an environment that holds the actual values of `Tensors` and simulates the running of a `Graph`. In a sense, `Graph` is like a **compiled executable**, while `Runtime` is like a **process** in which the `Graph` runs.
 
 ```python
 graph = ag.Graph()
