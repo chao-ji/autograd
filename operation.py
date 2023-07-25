@@ -30,9 +30,21 @@ class Operation(object):
     self._dependent_ops = dependent_ops
 
   def _get_bp_indices(self):
+    """Returns the indices of input tensors that expect a backpropped gradient
+    tensor. Can be overrided by subclasses.
+
+    If an Op does not have a `_grad_func`, then its output tensors are treated
+    as "constants", hence no gradient will be backpropped to its input tensors.
+
+    Returns:
+      bp_indices (List[int]): list of indices of input tensors that expect
+        backpropped gradient.
+    """
     if not hasattr(self, "_grad_func"):
+      # no backpropped gradient.
       bp_indices = []
     else:
+      # assume all input tensors expect backpropped gradient.
       bp_indices = list(range(len(self._input_list)))
     return bp_indices
 
@@ -101,12 +113,13 @@ class Operation(object):
     return expected_backprops
 
   def backprop(self, x_tensors, dy_tensors=None):
-    """
+    """Backprop gradients `dy_tensors` to each tensor in `x_tensors`.
+
     Args:
       x_tensors (List[Tensor]): list of tensors whose gradients are to be
         returned.
       dy_tensors (List[Tensor]): list of gradient tensors w.r.t. the outputs of
-        this Op. If None, defaults to tensor filled with ones.
+        this Op. If None, defaults to tensors filled with ones.
 
     Returns:
       dx_tensors (List[Tensor]): List of gradient tensors backpropped to each
@@ -150,6 +163,9 @@ class Operation(object):
           cum_grad[tensor.op.id] = defaultdict(list)
         cum_grad[tensor.op.id][tensor.tensor_index].append(grad_tensor)
 
+        # when each tensor of an Op has received the expected number of
+        # backpropped gradients, compute the full gradient by adding them up,
+        # and enque the tuple (op, dy_tensors).
         if all((
             len(expected_backprops[tensor.op.id][tensor_index]) ==
             len(cum_grad[tensor.op.id][tensor_index])
@@ -203,7 +219,7 @@ class Operation(object):
   def _create_output_tensors(self):
     """Set attribute `self._outputs` as the created tensors.
 
-    Args:
+    Returns:
       outputs (List[Tensor]): the created Tensor instances.
     """
     from .tensor import Tensor
@@ -234,6 +250,11 @@ class Operation(object):
     return output_tensor
 
   def _get_dependent_tensor(self, op, name, dic, tensor_index):
+    """Retrieve or create a "dependet" tensor.
+
+    Dependent tensors are those that depend on this Op (e.g. Shape, Rank). This
+    is to avoid creating multiple `Shape` (or other) tensors of the same Op.
+    """
     tensor = self.output(tensor_index)
     if tensor not in dic:
       dependent_tensor = op(input_list=[tensor], name=name).output(0)
@@ -241,14 +262,14 @@ class Operation(object):
     return dic[tensor]
 
   def get_shape_tensor(self, tensor_index=0):
-    """Create the shape tensor for one of the output tensor of this op.
+    """Create the Shape tensor for one of the output tensor of this op.
 
     Args:
       tensor_index (int): (Optional) index of the output tensor whose `Shape` op
         is to be created. Defaults to 0.
 
     Returns:
-      shape_tensor (Tensor): a shape tensor.
+      shape_tensor (Tensor): a Shape tensor.
     """
     from .generic_ops import Shape
     return self._get_dependent_tensor(
@@ -259,6 +280,15 @@ class Operation(object):
     )
 
   def get_size_tensor(self, tensor_index=0):
+    """Create the Size tensor for one of the output tensor of this op.
+
+    Args:
+      tensor_index (int): (Optional) index of the output tensor whose `Shape` op
+        is to be created. Defaults to 0.
+
+    Returns:
+      size_tensor (Tensor): a Size tensor.
+    """
     from .generic_ops import Size
     return self._get_dependent_tensor(
         Size,
@@ -268,6 +298,15 @@ class Operation(object):
     )
 
   def get_rank_tensor(self, tensor_index=0):
+    """Create the Rank tensor for one of the output tensor of this op.
+
+    Args:
+      tensor_index (int): (Optional) index of the output tensor whose `Shape` op
+        is to be created. Defaults to 0.
+
+    Returns:
+      rank_tensor (Tensor): a Rank tensor.
+    """
     from .generic_ops import Rank
     return self._get_dependent_tensor(
         Rank,
@@ -277,6 +316,15 @@ class Operation(object):
     )
 
   def get_zeros_tensor(self, tensor_index=0):
+    """Create the ZerosLike tensor for one of the output tensor of this op.
+
+    Args:
+      tensor_index (int): (Optional) index of the output tensor whose `Shape` op
+        is to be created. Defaults to 0.
+
+    Returns:
+      zeros_like_tensor (Tensor): a ZerosLike tensor.
+    """
     from .generic_ops import ZerosLike
     return self._get_dependent_tensor(
         ZerosLike,
@@ -286,6 +334,15 @@ class Operation(object):
     )
 
   def get_ones_tensor(self, tensor_index=0):
+    """Create the OnesLike tensor for one of the output tensor of this op.
+
+    Args:
+      tensor_index (int): (Optional) index of the output tensor whose `Shape` op
+        is to be created. Defaults to 0.
+
+    Returns:
+      zeros_like_tensor (Tensor): a OnesLike tensor.
+    """
     from .generic_ops import OnesLike
     return self._get_dependent_tensor(
         OnesLike,

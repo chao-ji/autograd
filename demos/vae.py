@@ -198,4 +198,4 @@ if __name__ == "__main__":
 
     print("loss", epoch, -np.mean(losses))
 
-    decoder.save_variable_weights(f"vae_weights/weights_{i}")
+    decoder.save_variable_weights(f"vae_weights/weights_{epoch}")
