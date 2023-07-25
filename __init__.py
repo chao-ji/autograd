@@ -1,6 +1,16 @@
-
-from . import optimizers
-from . import layers
-from .wrappers import constant, zeros_like, ones_like, zeros, ones, shape, rank, size, reshape, transpose, range, stack, unstack, tile, strided_slice, slice, concat, pad, expand_dims, squeeze, fill, add, subtract, multiply, divide, negative, floordiv, floormod, maximum, minimum, divide_no_nan, add_n, reduce_mean, reduce_sum, reduce_prod, matmul, squared_difference, square, greater_equal, greater, less_equal, less, equal, not_equal, cumsum, cumprod, exp, log1p, log, reciprocal, rsqrt, sqrt, dynamic_stitch, gather, broadcast_to, where, stop_gradient, conv2d, conv2d_transpose, max_pool2d, avg_pool2d, sigmoid, tanh, relu, leaky_relu, log_softmax, softmax, random_uniform, random_normal, dropout, batch_normalization, moments, softmax_cross_entropy_with_logits, sigmoid_cross_entropy_with_logits, placeholder
-
+from . import layers, optimizers
 from .containers import Graph, Runtime, get_default_graph
+from .wrappers import (
+    add, add_n, avg_pool2d, batch_normalization, broadcast_to, concat, constant,
+    conv2d, conv2d_transpose, cumprod, cumsum, divide, divide_no_nan, dropout,
+    dynamic_stitch, equal, exp, expand_dims, fill, floordiv, floormod, gather,
+    greater, greater_equal, leaky_relu, less, less_equal, log, log1p,
+    log_softmax, matmul, max_pool2d, maximum, minimum, moments, multiply,
+    negative, not_equal, ones, ones_like, pad, placeholder, random_normal,
+    random_uniform, range, rank, reciprocal, reduce_mean, reduce_prod,
+    reduce_sum, relu, reshape, rsqrt, shape, sigmoid,
+    sigmoid_cross_entropy_with_logits, size, slice, softmax,
+    softmax_cross_entropy_with_logits, sqrt, square, squared_difference,
+    squeeze, stack, stop_gradient, strided_slice, subtract, tanh, tile,
+    transpose, unstack, where, zeros, zeros_like,
+)

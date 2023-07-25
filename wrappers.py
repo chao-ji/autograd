@@ -16,8 +16,8 @@ from .math_ops import (
     SquaredDifference, Sub, Sum,
 )
 from .nn_ops import (
-    AvgPool2D, Conv2D, Conv2DBackpropInput, LogSoftmax, MaxPool2D, Relu,
-    Sigmoid, Softmax, SoftmaxCrossEntropyWithLogits, Tanh, LeakyRelu,
+    AvgPool2D, Conv2D, Conv2DBackpropInput, LeakyRelu, LogSoftmax, MaxPool2D,
+    Relu, Sigmoid, Softmax, SoftmaxCrossEntropyWithLogits, Tanh,
 )
 from .random_ops import RandomStandardNormal, RandomUniform
 from .resource_ops import Placeholder
@@ -144,7 +144,8 @@ def transpose(tensor, perm=None, name=None):
       perm = Range(
           input_list=[
               Add(input_list=[rank, minus_one_scalar]).output(0),
-              minus_one_scalar, minus_one_scalar,
+              minus_one_scalar,
+              minus_one_scalar,
           ],
       ).output(0)
   return _transpose(tensor, perm, name=name)
@@ -196,11 +197,13 @@ def tile(inputs, multiples, name=None):
 
 
 @_tensorize_input(
-    argpositions=(0, 1, 2, 3), argkeys=("inputs", "begin", "end", "strides"),
+    argpositions=(0, 1, 2, 3),
+    argkeys=("inputs", "begin", "end", "strides"),
 )
 def strided_slice(inputs, begin, end, strides, name=None):
   return StridedSlice(
-      input_list=[inputs, begin, end, strides], name=name,
+      input_list=[inputs, begin, end, strides],
+      name=name,
   ).output(0)
 
 
@@ -223,7 +226,9 @@ def _concat(*inputs, name=None):
 @_tensorize_input(argpositions=(0, 1), argkeys=("tensor", "paddings"))
 def pad(tensor, paddings, constant_values=0, name=None):
   return Pad(
-      input_list=[tensor, paddings], constant_values=constant_values, name=name,
+      input_list=[tensor, paddings],
+      constant_values=constant_values,
+      name=name,
   ).output(0)
 
 
@@ -357,11 +362,15 @@ def _reduce_prod(tensor, axis, keepdims=False, name=None):
 def matmul(x, y, transpose_x=False, transpose_y=False, name=None):
   if x.shape.level > 0 and x.shape.ndims == 2 and y.shape.level > 0 and y.shape.ndims == 2:
     return MatMul(
-        input_list=[x, y], transpose_x=transpose_x, transpose_y=transpose_y,
+        input_list=[x, y],
+        transpose_x=transpose_x,
+        transpose_y=transpose_y,
     ).output(0)
   else:
     return BatchMatMul(
-        input_list=[x, y], transpose_x=transpose_x, transpose_y=transpose_y,
+        input_list=[x, y],
+        transpose_x=transpose_x,
+        transpose_y=transpose_y,
     ).output(0)
 
 
@@ -490,13 +499,21 @@ def stop_gradient(tensor, name=None):
 @_tensorize_input(argpositions=(0, 1), argkeys=("inputs", "filters"))
 def conv2d(inputs, filters, strides, padding, name=None):
   return Conv2D(
-      input_list=[inputs, filters], strides=strides, padding=padding, name=name,
+      input_list=[inputs, filters],
+      strides=strides,
+      padding=padding,
+      name=name,
   ).output(0)
 
 
 @_tensorize_input(argpositions=(0, 1, 2), argkeys=("inputs", "filters"))
 def conv2d_transpose(
-    inputs, filters, output_shape, strides, padding, name=None,
+    inputs,
+    filters,
+    output_shape,
+    strides,
+    padding,
+    name=None,
 ):
   return Conv2DBackpropInput(
       input_list=[filters, inputs, output_shape],
@@ -565,7 +582,8 @@ def random_uniform(shape, minval=0.0, maxval=1.0, name=None):
         0,
         1,
         2,
-    ), argkeys=(
+    ),
+    argkeys=(
         "shape",
         "minval",
         "maxval",
@@ -589,7 +607,8 @@ def random_normal(shape, mean=0.0, stddev=1.0, name=None):
         0,
         1,
         2,
-    ), argkeys=(
+    ),
+    argkeys=(
         "shape",
         "mean",
         "stddev",
@@ -631,11 +650,22 @@ def dropout(tensor, rate, name=None):
 @_tensorize_input(
     argpositions=(0, 1, 2, 3, 4, 5),
     argkeys=(
-        "tensor", "mean", "variance", "offset", "scale", "variance_epsilon",
+        "tensor",
+        "mean",
+        "variance",
+        "offset",
+        "scale",
+        "variance_epsilon",
     ),
 )
 def batch_normalization(
-    tensor, mean, variance, offset, scale, variance_epsilon=0.0001, name=None,
+    tensor,
+    mean,
+    variance,
+    offset,
+    scale,
+    variance_epsilon=0.0001,
+    name=None,
 ):
 
   add = Add(input_list=[variance, variance_epsilon]).output(0)
@@ -694,7 +724,8 @@ def softmax_cross_entropy_with_logits(labels, logits, name=None):
   reshaped_labels, _, _ = _flat_tensor(labels)
 
   ce = SoftmaxCrossEntropyWithLogits(
-      input_list=[reshaped_logits, reshaped_labels], name=name,
+      input_list=[reshaped_logits, reshaped_labels],
+      name=name,
   ).output(0)
   slice2 = Slice(input_list=[logits_shape, zero_array, pack]).output(0)
   loss = Reshape(input_list=[ce, slice2]).output(0)

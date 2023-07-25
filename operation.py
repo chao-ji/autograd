@@ -252,31 +252,44 @@ class Operation(object):
     """
     from .generic_ops import Shape
     return self._get_dependent_tensor(
-        Shape, self.name + "_Shape", self._graph._shape_tensors, tensor_index,
+        Shape,
+        self.name + "_Shape",
+        self._graph._shape_tensors,
+        tensor_index,
     )
 
   def get_size_tensor(self, tensor_index=0):
     from .generic_ops import Size
     return self._get_dependent_tensor(
-        Size, self.name + "_Size", self._graph._size_tensors, tensor_index,
+        Size,
+        self.name + "_Size",
+        self._graph._size_tensors,
+        tensor_index,
     )
 
   def get_rank_tensor(self, tensor_index=0):
     from .generic_ops import Rank
     return self._get_dependent_tensor(
-        Rank, self.name + "_Rank", self._graph._rank_tensors, tensor_index,
+        Rank,
+        self.name + "_Rank",
+        self._graph._rank_tensors,
+        tensor_index,
     )
 
   def get_zeros_tensor(self, tensor_index=0):
     from .generic_ops import ZerosLike
     return self._get_dependent_tensor(
-        ZerosLike, self.name + "_ZerosLike", self._graph._zeroslike_tensors,
+        ZerosLike,
+        self.name + "_ZerosLike",
+        self._graph._zeroslike_tensors,
         tensor_index,
     )
 
   def get_ones_tensor(self, tensor_index=0):
     from .generic_ops import OnesLike
     return self._get_dependent_tensor(
-        OnesLike, self.name + "_OnesLike", self._graph._oneslike_tensors,
+        OnesLike,
+        self.name + "_OnesLike",
+        self._graph._oneslike_tensors,
         tensor_index,
     )

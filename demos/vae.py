@@ -1,11 +1,11 @@
-"""
-"""
+"""Generating MNIST images of digits using Variantional Autoencoder."""
 import gzip
 import os
 import sys
 
-import autograd as ag
 import numpy as np
+
+import autograd as ag
 
 
 def read_mnist_images(fn):
@@ -198,14 +198,4 @@ if __name__ == "__main__":
 
     print("loss", epoch, -np.mean(losses))
 
-    vids = [
-        graph.runtime.get_tensor_value(v.handle).item().id
-        for v in decoder.variables
-    ]
-    decoder_variable_values = [
-        graph.runtime.get_variable_value(vid) for vid in vids
-    ]
-
-    np.save(
-        f"weights_{epoch}", np.asarray(decoder_variable_values, dtype="object"),
-    )
+    decoder.save_variable_weights(f"vae_weights/weights_{i}")

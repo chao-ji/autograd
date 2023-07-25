@@ -54,7 +54,9 @@ class TruncatedNormalInitializer(Initializer):
       if invalid_indices.sum() == 0:
         break
       new_drawn = random_state.normal(
-          loc=mean, scale=stddev, size=invalid_indices.sum(),
+          loc=mean,
+          scale=stddev,
+          size=invalid_indices.sum(),
       )
       values[invalid_indices] = new_drawn
     return values.reshape(shape).astype(self._dtype)
@@ -82,7 +84,9 @@ class RandomUniformInitializer(Initializer):
     """
     random_state = self._get_random_state()
     return random_state.uniform(
-        low=self._minval, high=self._maxval, size=shape,
+        low=self._minval,
+        high=self._maxval,
+        size=shape,
     ).astype(self._dtype)
 
 
@@ -171,7 +175,9 @@ class GlorotUniformInitializer(_VarianceBasedInitializer):
     limit = self._get_limit(shape, 6, False)
     random_state = self._get_random_state()
     return random_state.uniform(
-        low=-limit, high=limit, size=shape,
+        low=-limit,
+        high=limit,
+        size=shape,
     ).astype(self._dtype)
 
 
@@ -192,7 +198,9 @@ class GlorotNormalInitializer(_VarianceBasedInitializer):
     limit = self._get_limit(shape, 2, False)
     random_state = self._get_random_state()
     return random_state.normal(
-        loc=0, scale=limit, size=shape,
+        loc=0,
+        scale=limit,
+        size=shape,
     ).astype(self._dtype)
 
 
@@ -211,7 +219,9 @@ class HeUniformInitializer(_VarianceBasedInitializer):
     limit = self._get_limit(shape, 6, True)
     random_state = self._get_random_state()
     return random_state.uniform(
-        low=-limit, high=limit, size=shape,
+        low=-limit,
+        high=limit,
+        size=shape,
     ).astype(self._dtype)
 
 
@@ -230,5 +240,7 @@ class HeNormalInitializer(_VarianceBasedInitializer):
     limit = self._get_limit(shape, 2, True)
     random_state = self._get_random_state()
     return random_state.normal(
-        loc=0, scale=limit, size=shape,
+        loc=0,
+        scale=limit,
+        size=shape,
     ).astype(self._dtype)

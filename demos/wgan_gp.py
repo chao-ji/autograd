@@ -1,10 +1,13 @@
-"""Generating MNIST images of digits using WGAN with gradient penalty."""
+"""Generating MNIST images of digits using WGAN with gradient penalty.
+https://arxiv.org/abs/1704.00028
+"""
 import gzip
 import os
 import sys
 
-import autograd as ag
 import numpy as np
+
+import autograd as ag
 
 random_state = np.random.RandomState(None)
 
@@ -205,14 +208,4 @@ if __name__ == "__main__":
       print()
 
     if i % 200 == 0:
-      vids = [
-          graph.runtime.get_tensor_value(v.handle).item().id
-          for v in generator.variables
-      ]
-      generator_variable_values = [
-          graph.runtime.get_variable_value(vid) for vid in vids
-      ]
-      np.save(
-          f"gp_weights/weights_{i}",
-          np.asarray(generator_variable_values, dtype="object"),
-      )
+      generator.save_variable_weights(f"gp_weights/weights_{i}")

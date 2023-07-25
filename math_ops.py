@@ -15,11 +15,15 @@ class BroadcastGradientArgs(Operation):
   def _run(self, x_shape, y_shape):
     if len(x_shape) > len(y_shape):
       y_shape = np.pad(
-          y_shape, [[len(x_shape) - len(y_shape), 0]], constant_values=1,
+          y_shape,
+          [[len(x_shape) - len(y_shape), 0]],
+          constant_values=1,
       )
     elif len(y_shape) > len(x_shape):
       x_shape = np.pad(
-          x_shape, [[len(y_shape) - len(x_shape), 0]], constant_values=1,
+          x_shape,
+          [[len(y_shape) - len(x_shape), 0]],
+          constant_values=1,
       )
     reduction_indices_x = np.where(x_shape == 1)[0]
     reduction_indices_y = np.where(y_shape == 1)[0]
@@ -418,14 +422,16 @@ class Mean(Operation, _ReductionOp):
       )
       range0 = Range(
           input_list=[
-              Const(value=np.asarray(0, dtype="int32")).output(0), size_tensor,
+              Const(value=np.asarray(0, dtype="int32")).output(0),
+              size_tensor,
               Const(value=np.asarray(1, dtype="int32")).output(0),
           ],
       )
       ds = DynamicStitch(
           input_list=[
               range0.output(0),
-              mod.output(0), shape_tensor,
+              mod.output(0),
+              shape_tensor,
               fill.output(0),
           ],
       )
@@ -497,14 +503,16 @@ class Sum(Operation, _ReductionOp):
       )
       range0 = Range(
           input_list=[
-              Const(value=np.asarray(0, dtype="int32")).output(0), size_tensor,
+              Const(value=np.asarray(0, dtype="int32")).output(0),
+              size_tensor,
               Const(value=np.asarray(1, dtype="int32")).output(0),
           ],
       )
       ds = DynamicStitch(
           input_list=[
               range0.output(0),
-              mod.output(0), shape_tensor,
+              mod.output(0),
+              shape_tensor,
               fill.output(0),
           ],
       )
@@ -559,7 +567,8 @@ class Prod(Operation, _ReductionOp):
       size_tensor = shape_tensor.op.get_size_tensor(tensor_index=0)
       range1 = Range(
           input_list=[
-              Const(value=np.asarray(0, dtype="int32")).output(0), rank_tensor,
+              Const(value=np.asarray(0, dtype="int32")).output(0),
+              rank_tensor,
               Const(value=np.asarray(1, dtype="int32")).output(0),
           ],
       )
@@ -568,7 +577,8 @@ class Prod(Operation, _ReductionOp):
       gather = Gather(
           input_list=[
               shape_tensor,
-              mod1.output(0), zero_scalar_tensor,
+              mod1.output(0),
+              zero_scalar_tensor,
           ],
       )
       prod = Prod(
@@ -580,7 +590,8 @@ class Prod(Operation, _ReductionOp):
       gather1 = Gather(
           input_list=[
               shape_tensor,
-              listdiff.output(0), zero_scalar_tensor,
+              listdiff.output(0),
+              zero_scalar_tensor,
           ],
       )
       concat = Concat(
@@ -629,7 +640,8 @@ class Prod(Operation, _ReductionOp):
       mod = FloorMod(input_list=[add.output(0), size_tensor])
       range0 = Range(
           input_list=[
-              Const(value=np.asarray(0, dtype="int32")).output(0), size_tensor,
+              Const(value=np.asarray(0, dtype="int32")).output(0),
+              size_tensor,
               Const(value=np.asarray(1, dtype="int32")).output(0),
           ],
       )
@@ -643,7 +655,8 @@ class Prod(Operation, _ReductionOp):
       ds = DynamicStitch(
           input_list=[
               range0.output(0),
-              mod.output(0), shape_tensor,
+              mod.output(0),
+              shape_tensor,
               fill.output(0),
           ],
       )
@@ -767,7 +780,9 @@ class BatchMatMul(Operation):
     self._transpose_x = transpose_x
     self._transpose_y = transpose_y
     super(BatchMatMul, self).__init__(
-        graph=graph, name=name, input_list=input_list,
+        graph=graph,
+        name=name,
+        input_list=input_list,
     )
 
   def _run(self, x, y):
@@ -805,7 +820,8 @@ class BatchMatMul(Operation):
       )
 
     outputs = np.apply_along_axis(
-        _func, 1,
+        _func,
+        1,
         np.arange(x_flat.shape[0])[:, np.newaxis],
     )
     outputs = np.reshape(outputs, x.shape[:-2] + outputs.shape[-2:])
@@ -1057,7 +1073,9 @@ class Cumsum(Operation):
   def _run(self, inputs, axis):
     if self._reverse:
       inputs = np.take(
-          inputs, np.arange(inputs.shape[axis] - 1, -1, -1), axis=axis,
+          inputs,
+          np.arange(inputs.shape[axis] - 1, -1, -1),
+          axis=axis,
       )
     if self._exclusive:
       inputs = np.take(inputs, np.arange(0, inputs.shape[axis] - 1), axis=axis)
@@ -1067,7 +1085,9 @@ class Cumsum(Operation):
     outputs = np.cumsum(inputs, axis)
     if self._reverse:
       outputs = np.take(
-          outputs, np.arange(outputs.shape[axis] - 1, -1, -1), axis=axis,
+          outputs,
+          np.arange(outputs.shape[axis] - 1, -1, -1),
+          axis=axis,
       )
     return outputs
 
@@ -1099,7 +1119,9 @@ class Cumprod(Operation):
   def _run(self, inputs, axis):
     if self._reverse:
       inputs = np.take(
-          inputs, np.arange(inputs.shape[axis] - 1, -1, -1), axis=axis,
+          inputs,
+          np.arange(inputs.shape[axis] - 1, -1, -1),
+          axis=axis,
       )
     if self._exclusive:
       inputs = np.take(inputs, np.arange(0, inputs.shape[axis] - 1), axis=axis)
@@ -1109,7 +1131,9 @@ class Cumprod(Operation):
     outputs = np.cumprod(inputs, axis)
     if self._reverse:
       outputs = np.take(
-          outputs, np.arange(outputs.shape[axis] - 1, -1, -1), axis=axis,
+          outputs,
+          np.arange(outputs.shape[axis] - 1, -1, -1),
+          axis=axis,
       )
     return outputs
 

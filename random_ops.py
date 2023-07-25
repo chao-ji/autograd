@@ -9,7 +9,9 @@ class RandomUniform(Operation, _TensorShapeAsInput):
 
   def __init__(self, input_list, name=None, graph=None):
     super(RandomUniform, self).__init__(
-        graph=graph, input_list=input_list, name=name,
+        graph=graph,
+        input_list=input_list,
+        name=name,
     )
 
   def _run(self, shape):
@@ -21,7 +23,9 @@ class RandomStandardNormal(Operation, _TensorShapeAsInput):
 
   def __init__(self, input_list, name=None, graph=None):
     super(RandomStandardNormal, self).__init__(
-        graph=graph, input_list=input_list, name=name,
+        graph=graph,
+        input_list=input_list,
+        name=name,
     )
 
   def _run(self, shape):

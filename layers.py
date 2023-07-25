@@ -1,3 +1,4 @@
+"""Defines Layer class as higher level abstraction for using variables."""
 from collections import namedtuple
 
 import numpy as np
@@ -10,7 +11,7 @@ from .initializers import (
 )
 from .math_ops import Add
 from .resource_ops import AddToVariable, CreateVariable, ReadVariable
-from .wrappers import relu, tanh, sigmoid, leaky_relu
+from .wrappers import leaky_relu, relu, sigmoid, tanh
 
 ACTIVATIONS = {
     "relu": relu,
@@ -34,9 +35,13 @@ Variable = namedtuple("Variable", ["weight", "handle", "trainable"])
 
 
 class Layer(object):
+  """Base class of all neural network layers."""
 
   def __init__(
-      self, activation=None, kernel_initializer=None, bias_initializer=None,
+      self,
+      activation=None,
+      kernel_initializer=None,
+      bias_initializer=None,
   ):
     self._variables = []
     if callable(activation):
@@ -77,7 +82,10 @@ class Layer(object):
 
   def _build(self, shape_list, init_fn_list, flag_list, trainable_list):
     for shape, init_fn, flag, trainable in zip(
-        shape_list, init_fn_list, flag_list, trainable_list,
+        shape_list,
+        init_fn_list,
+        flag_list,
+        trainable_list,
     ):
       if not flag:
         continue
@@ -91,7 +99,9 @@ class Layer(object):
 
       self._variables.append(
           Variable(
-              weight=read_var, handle=create_var.output(0), trainable=trainable,
+              weight=read_var,
+              handle=create_var.output(0),
+              trainable=trainable,
           ),
       )
 
@@ -102,12 +112,10 @@ class Layer(object):
         runtime.get_tensor_value(v.handle).item().id for v in self.variables
     ]
     variable_values = np.asarray(
-        [
-            runtime.get_variable_value(vid) for vid in vids
-        ],
-                                     dtype="object",
+        [runtime.get_variable_value(vid) for vid in vids],
+        dtype="object",
     )
-    return variable_values
+    np.save(filename, variable_values)
 
   def load_variable_weights(self, filename):
     weights = np.load(filename, allow_pickle=True)
@@ -120,6 +128,7 @@ class Layer(object):
 
 
 class Dense(Layer):
+  """Dense layer."""
 
   def __init__(
       self,
@@ -165,6 +174,7 @@ class Dense(Layer):
 
 
 class Conv2D(Layer):
+  """2D Convolution layer."""
 
   def __init__(
       self,
@@ -219,6 +229,7 @@ class Conv2D(Layer):
 
 
 class Conv2DTranspose(Layer):
+  """Transposed 2D convolution layer."""
 
   def __init__(
       self,
@@ -271,10 +282,14 @@ class Conv2DTranspose(Layer):
     filters = self._variables[0].weight
 
     out_height = self._infer_spatial_size(
-        inputs.shape.raw_shape[1], self._kernel_size[0], self._strides[0],
+        inputs.shape.raw_shape[1],
+        self._kernel_size[0],
+        self._strides[0],
     )
     out_width = self._infer_spatial_size(
-        inputs.shape.raw_shape[2], self._kernel_size[1], self._strides[1],
+        inputs.shape.raw_shape[2],
+        self._kernel_size[1],
+        self._strides[1],
     )
 
     if self._outputs_shape is None:
@@ -301,6 +316,7 @@ class Conv2DTranspose(Layer):
 
 
 class BatchNormalization(Layer):
+  """Batch normalization layer."""
 
   def __init__(
       self,
@@ -358,7 +374,8 @@ class BatchNormalization(Layer):
       mean = Mean(input_list=[inputs, axis]).output(0)
       variance = Mean(
           input_list=[
-              SquaredDifference(input_list=[inputs, mean]).output(0), axis,
+              SquaredDifference(input_list=[inputs, mean]).output(0),
+              axis,
           ],
       ).output(0)
 
