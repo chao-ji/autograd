@@ -3,12 +3,12 @@
 
 ## Introduction
 
-This is a project that I've been contemplating over the years but not able to finish until just recently (mid 2023). The motivation was to demystify how backpropagation algorithm works in machine learning libraries like TensorFlow, which allows you to take a differentiable computational graph and efficiently compute the gradients (first or higher order). The basic idea is to try to build a "mini" framework from the ground up based on the general principles of differentiation and the chain rule of derivatives. By "mini" I mean I try to keep the implementation as minimal as possible by focusing on components that are necessary for defining the graph and computing gradients, so that the codebase is relatively easy to understand. That said, the set of Operations is still reasonably expressive (support math, neural network, N-D array, and data flow operations), which allows you to build common model architectures and can be tested on standard benchmark datasets like MNIST.
+This is a project that I've been contemplating over the years but not able to finish until just recently (mid 2023). The motivation was to demystify how backpropagation algorithm works in machine learning libraries like TensorFlow, which allows you to take a differentiable computational graph and efficiently compute the gradients (first or higher order). The basic idea is to try to build a "mini" framework from the ground up based on the general principles of differentiation and the chain rule of derivatives. By "mini" I mean I try to keep the implementation as minimal as possible by focusing on components that are necessary for defining the graph and computing gradients, so that the codebase is much more readable than a full-fledge library. That said, the collection of Operations is still reasonably expressive (support math, neural network, N-D array, and data flow operations), which allows you to build common model architectures and can be tested on standard benchmark datasets like MNIST.
 
 
 ## Design
 
-This section briefly discusses the implementation details. Proceed to **Quick Start** if not interested.
+This section briefly discusses the implementation details. Proceed to [Quick Start](## Quick Start) if not interested.
 
 ### Graph, Operations and Tensors
 
@@ -78,13 +78,13 @@ The following is an example of computing gradients (and gradients or gradients) 
 
 ## Codebase
 
-The entire codebase is distributed into the following files
-* `operation.py`: The base class for all `Operation`s
-* `tensor.py`: The `Tensor` class
-* `tensor_shape.py`: The `TensorShape` class that describes the "static" shape of `Tensor`s
-* `containers.py`: The `Graph` and `Runtime` classes
-* `math_ops.py`, `array_ops.py`, `generic_ops.py`, `data_flow_ops.py`, `nn_ops.py`, `random_ops.py`, `resource_ops.py`: `Operation`s in different categories
-* `default_stack.py`: The stack of global default graph
+
+The entire codebase is modularized as follows:
+* The base class for all Ops is defined in `operation.py`.
+* `Tensor` class is defined in `tensor.py`, and the `TensorShape` class is defined in `tensor_shape.py`.
+* The `Graph` and `Runtime` classes are defined in `containers.py`
+* Various types of Ops are defined separately in `math_ops.py`, `array_ops.py`, `generic_ops.py`, `data_flow_ops.py`, `nn_ops.py`, `random_ops.py`, `resource_ops.py`.
+* The implicit stack of default graph is defined in `default_stack.py`.
 
 On top of the above files, the following files provide interfaces for higher level abstractions (e.g. layers, optimizers, initializers)
 
@@ -105,7 +105,7 @@ Just clone this repository
 git clone git@github.com:chao-ji/autograd.git /path_to_autograd/autograd
 ```
 
-then add the directory `/path_to_autograd` to the list of python search paths
+then add the directory `/path_to_autograd` to python search paths
 
 ```
 PYTHONPATH=$PYTHONPATH:/path_to_autograd
