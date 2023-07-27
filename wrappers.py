@@ -1,4 +1,6 @@
 """Functions that wrap raw operations."""
+from functools import wraps
+
 import numpy as np
 
 from .array_ops import (
@@ -45,6 +47,7 @@ def _tensorize_input(argpositions=[], argkeys=[], all_posargs=False):
 
   def parameterized_wrapper(func):
 
+    @wraps(func)
     def wrapper(*args, **kwargs):
       new_args = []
       new_kwargs = dict()
@@ -79,25 +82,68 @@ def _tensorize_input(argpositions=[], argkeys=[], all_posargs=False):
   return parameterized_wrapper
 
 
-@_tensorize_input(argpositions=(0,), argkeys=("value",))
 def constant(value, name=None):
+  """Create a constant tensor.
+
+  Args:
+    value (type convertable to Tensor): constant value convertable to Tensor.
+    name (str): name of the Op. Defaults to None.
+
+  Returns:
+    value (Tensor): a Const Tensor.
+  """
+  value = np.asarray(value)
+  if value.dtype in _FLOAT_TYPES:
+    value = value.astype("float32")
+  elif value.dtype in _INT_TYPES:
+    value = value.astype("int32")
+
+  assert value.dtype in _NUMERIC_TYPES
+  value = Const(value=value, name=name).output(0)
   return value
 
 
 @_tensorize_input(argpositions=(0,), argkeys=("inputs",))
 def zeros_like(inputs, name=None):
+  """Create a tensor populated with zeros of the same shape as `inputs`.
+
+  Args:
+    inputs (Tensor): a Tensor or array-like object.
+    name (str): name of the Op. Defaults to None.
+
+  Returns:
+    tensor (Tensor): tensor populated with zeros.
+  """
   tensor = ZerosLike(input_list=[inputs], name=name).output(0)
   return tensor
 
 
 @_tensorize_input(argpositions=(0,), argkeys=("inputs",))
 def ones_like(inputs, name=None):
+  """Create a tensor populated with ones of the same shape as `inputs`.
+
+  Args:
+    inputs (Tensor): a Tensor or array-like object.
+    name (str): name of the Op. Defaults to None.
+
+  Returns:
+    tensor (Tensor): tensor populated with ones.
+  """
   tensor = OnesLike(input_list=[inputs], name=name).output(0)
   return tensor
 
 
 @_tensorize_input(argpositions=(0,), argkeys=("shape",))
 def zeros(shape, name=None):
+  """Create a tensor filled with zeros with provided shape `shape`.
+
+  Args:
+    shape (Tensor): a tuple or list of integers, or a 1D `Tensor`.
+    name (str): name of the Op. Defaults to None.
+
+  Returns:
+    tensor (Tensor): a tensor filled with zeros.
+  """
   zero_scalar = Const(value=np.asarray(0, dtype="float32")).output(0)
   tensor = Fill(input_list=[shape, zero_scalar], name=name).output(0)
   return tensor
@@ -105,6 +151,15 @@ def zeros(shape, name=None):
 
 @_tensorize_input(argpositions=(0,), argkeys=("shape",))
 def ones(shape, name=None):
+  """Create a tensor filled with ones with provided shape `shape`.
+
+  Args:
+    shape (Tensor): a tuple or list of integers, or a 1D `Tensor`.
+    name (str): name of the Op. Defaults to None.
+
+  Returns:
+    tensor (Tensor): a tensor filled with ones.
+  """
   one_scalar = Const(value=np.asarray(1, dtype="float32")).output(0)
   tensor = Fill(input_list=[shape, one_scalar], name=name).output(0)
   return tensor
@@ -112,29 +167,77 @@ def ones(shape, name=None):
 
 @_tensorize_input(argpositions=(0,), argkeys=("tensor",))
 def shape(tensor, name=None):
+  """Returns a tensor containing the shape of the input tensor.
+
+  Args:
+    tensor (Tensor): a tensor object.
+    name (str): name of the Op. Defaults to None.
+
+  Returns:
+    tensor_shape (Tensor): a 1-D tensor containing the shape of input tensor.
+  """
   tensor_shape = Shape(input_list=[tensor], name=name).output(0)
   return tensor_shape
 
 
 @_tensorize_input(argpositions=(0,), argkeys=("tensor",))
 def rank(tensor, name=None):
+  """Returns the rank of a tensor.
+
+  Args:
+    tensor (Tensor): a tensor object.
+    name (str): name of the Op. Defaults to None.
+
+  Returns:
+    tensor_rank (Tensor): a 0-D tensor containing the rank of input tensor.
+  """
   tensor_rank = Rank(input_list=[tensor], name=name).output(0)
   return tensor_rank
 
 
 @_tensorize_input(argpositions=(0,), argkeys=("tensor",))
 def size(tensor, name=None):
+  """Returns the size (number of elements) of a tensor.
+
+  Args:
+    tensor (Tensor): a tensor object.
+    name (str): name of the Op. Defaults to None.
+
+  Returns:
+    tensor_size (Tensor): a 0-D tensor containing the size of input tensor.
+  """
   tensor_size = Size(input_list=[tensor], name=name).output(0)
   return tensor_size
 
 
 @_tensorize_input(argpositions=(0, 1), argkeys=("tensor", "shape"))
 def reshape(tensor, shape, name=None):
+  """Reshape a tensor.
+
+  Args:
+    tensor (Tensor): a tensor object.
+    shape (Tensor): shape of the output tensor.
+    name (str): name of the Op. Defaults to None.
+
+  Returns:
+    reshaped (Tensor): the reshaped tensor.
+  """
   reshaped = Reshape(input_list=[tensor, shape], name=name).output(0)
   return reshaped
 
 
 def transpose(tensor, perm=None, name=None):
+  """Permutes the dimensions of a tensor.
+
+  Args:
+    tensor (Tensor): a tensor object.
+    perm (Tensor): a permutation of the dimension of the input tensor. If None,
+      defaults to [rank(tensor)-1, rank(tensor)-2, ..., 0]
+    name (str): name of the Op. Defaults to None.
+
+  Returns:
+    outputs (Tensor): the transposed tensor.
+  """
   if perm is None:
     if tensor.shape.level > 0:
       perm = np.arange(0, tensor.shape.ndims)[::-1]
@@ -164,6 +267,23 @@ def _range(start, limit, delta, name=None):
 
 
 def range(start, limit=None, delta=1, name=None):
+  """Create a sequence of numbers that begins at `start` and extends by
+  increments of `delta` up to but not including `limit`.
+
+  Args:
+    start (Tensor): a 0-D Tensor (scalar). The first entry in the range if
+      `limit` is not None; otherwise, acts as `limit` and first entry defaults
+      to 0.
+    limit (Tensor): a 0-D tensor (scalar). Upper limit of the sequence,
+      exclusive. If None, defaults to the value of `start` and the first entry
+      entry defaults to 0.
+    delta (Tensor): a 0-D tensor (scalar). Number that increments `start`.
+      Defaults to 1.
+    name (str): name of the Op. Defaults to None.
+
+  Returns:
+    outputs (Tensor): a 1-D Tensor.
+  """
   if limit is None:
     limit = start
     start = 0
@@ -176,12 +296,24 @@ def _stack(*tensors, axis=0, name=None):
 
 
 def stack(tensors, axis=0, name=None):
+  """Stack a list of rank-`R` tensors into one rank-`(R+1)` tensor.
+
+  Args:
+    tensors (List[Tensor]): a list of Tensors with the same shape.
+    axis (int): the axis to stack along. Defaults to 0.
+    name (str): name of the Op. Defaults to None.
+
+  Returns:
+    outputs (Tensor): a Tensor with rank `R+1`.
+  """
   assert isinstance(tensors, (tuple, list))
   return _stack(*tensors, axis=axis, name=name)
 
 
 @_tensorize_input(argpositions=(0,), argkeys=("tensor",))
 def unstack(tensor, num=None, axis=0, name=None):
+  """
+  """
   if num is None:
     if tensor.shape.level == 0 or tensor.shape[axis] is None:
       raise ValueError(f"Cannot infer `num` from shape {tensor.shape}")
@@ -360,7 +492,10 @@ def _reduce_prod(tensor, axis, keepdims=False, name=None):
 
 @_tensorize_input(argpositions=(0, 1), argkeys=("x", "y"))
 def matmul(x, y, transpose_x=False, transpose_y=False, name=None):
-  if x.shape.level > 0 and x.shape.ndims == 2 and y.shape.level > 0 and y.shape.ndims == 2:
+  if (
+      x.shape.level > 0 and x.shape.ndims == 2 and y.shape.level > 0 and
+      y.shape.ndims == 2
+  ):
     return MatMul(
         input_list=[x, y],
         transpose_x=transpose_x,

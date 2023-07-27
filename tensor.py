@@ -47,7 +47,7 @@ class Tensor(object):
   def __repr__(self):
     repstr = (
         f"<Tensor '{self.op.name}:{self.tensor_index}', "
-        "shape={self.shape.raw_shape}>"
+        f"shape={self.shape.raw_shape}>"
     )
     return repstr
 
@@ -181,41 +181,6 @@ class Tensor(object):
 
     tensor = StridedSlice(input_list=[tensor, begin, end, strides]).output(0)
     return tensor
-
-  def backprop(self, x_tensors, dy_tensor=None):
-    """Backpropagate gradient tensor. Generates gradient tensors w.r.t. tensors
-    in `x_tensors`.
-
-    Args:
-      x_tensors (List[Tensor]): list of tensors whose gradient will be generated
-        in the graph.
-      dy_tensor (Tensor): Gradient tensor that this tensor receives and
-        backpropagates. If None, defaults to tensor filled with ones.
-
-    Returns:
-      dx_tensors (List[Tensor]): List of gradient tensors backpropped to each
-        tensor in `x_tensors`.
-    """
-    from .generic_ops import OnesLike
-
-    if dy_tensor is None:
-      dy_tensors = [
-          OnesLike(input_list=[y_tensor]).output(0)
-          for y_tensor in self.op._outputs
-      ]
-    else:
-      dy_tensors = []
-      for i, y_tensor in enumerate(self.op._outputs):
-        if i == self.tensor_index:
-          dy_tensors.append(dy_tensor)
-        else:
-          dy_tensors.append(
-              OnesLike(input_list=[y_tensor]).output(0)
-              for y_tensor in self.op._outputs
-          )
-
-    dx_tensors = self.op.backprop(x_tensors, dy_tensors)
-    return dx_tensors
 
 
 def _build_vector_from_mixed(mixed):

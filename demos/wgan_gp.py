@@ -19,7 +19,8 @@ def read_mnist_images(fn):
     height = int.from_bytes(content[8:12], byteorder='big')
     width = int.from_bytes(content[12:16], byteorder='big')
     images = np.frombuffer(
-        content[16:], dtype=np.uint8,
+        content[16:],
+        dtype=np.uint8,
     ).reshape((num_images, height, width))
   return images
 
@@ -107,7 +108,8 @@ def minibatch_generator(images, batch_size):
   while True:
     yield images[
         random_state.choice(
-            images.shape[0], batch_size,
+            images.shape[0],
+            batch_size,
             False,
         )
     ].astype("float32")
@@ -137,10 +139,11 @@ if __name__ == "__main__":
 
   images_hat = real_images * epsilon + fake_images * (1 - epsilon)
   logits_hat = discriminator(images_hat)
-  grad_images_hat = logits_hat.backprop([images_hat])[0]
+  grad_images_hat = ag.backprop([logits_hat], [images_hat])[0]
   gp_loss = ag.reduce_mean(
       ag.square(
-          ag.sqrt(ag.reduce_sum(ag.square(grad_images_hat), axis=[1, 2, 3])) - 1,
+          ag.sqrt(ag.reduce_sum(ag.square(grad_images_hat), axis=[1, 2, 3])) -
+          1,
       ),
   )
 
@@ -149,17 +152,25 @@ if __name__ == "__main__":
 
   # optimizer and backprop graph
   optimizer_d = ag.optimizers.AdamOptimizer(
-      alpha=0.0001, beta1=0.0, beta2=0.9, epsilon=1e-07,
+      alpha=0.0001,
+      beta1=0.0,
+      beta2=0.9,
+      epsilon=1e-07,
   )
   optimizer_g = ag.optimizers.AdamOptimizer(
-      alpha=0.0001, beta1=0.0, beta2=0.9, epsilon=1e-07,
+      alpha=0.0001,
+      beta1=0.0,
+      beta2=0.9,
+      epsilon=1e-07,
   )
 
   grads_and_vars_d = optimizer_d.compute_gradients(
-      discriminator_loss, discriminator.variables,
+      discriminator_loss,
+      discriminator.variables,
   )
   grads_and_vars_g = optimizer_g.compute_gradients(
-      generator_loss, generator.variables,
+      generator_loss,
+      generator.variables,
   )
 
   # data
@@ -168,7 +179,9 @@ if __name__ == "__main__":
       os.path.join(path, "train-images-idx3-ubyte.gz"),
   )
   train_images = train_images.reshape(
-      train_images.shape[0], 28, 28,
+      train_images.shape[0],
+      28,
+      28,
       1,
   ).astype('float32')
   train_images = (
@@ -181,7 +194,8 @@ if __name__ == "__main__":
   for i in np.arange(15001):
     for j in np.arange(5):
       graph.runtime.set_placeholder_value(
-          real_images.op.id, next(data_generator),
+          real_images.op.id,
+          next(data_generator),
       )
 
       optimizer_d.apply_gradients(grads_and_vars_d, graph.runtime)
@@ -193,7 +207,8 @@ if __name__ == "__main__":
     if i % 100 == 0:
       print("i", i)
       graph.runtime.set_placeholder_value(
-          real_images.op.id, next(data_generator),
+          real_images.op.id,
+          next(data_generator),
       )
 
       print(

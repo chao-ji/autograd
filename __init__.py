@@ -1,5 +1,6 @@
-from . import layers, optimizers
+from . import layers, optimizers, raw_ops
 from .containers import Graph, Runtime, get_default_graph
+from .operation import backprop
 from .wrappers import (
     add, add_n, avg_pool2d, batch_normalization, broadcast_to, concat, constant,
     conv2d, conv2d_transpose, cumprod, cumsum, divide, divide_no_nan, dropout,

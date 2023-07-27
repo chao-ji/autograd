@@ -87,111 +87,6 @@ class Operation(object):
     #print("b", [o.shape.raw_shape for o in self._outputs])
     #print()
 
-  def _compute_expected_backprops(self):
-    """Traverse the graph from the `self` Op in the order of BFS, and count the
-    number of gradient tensors that will be backpropped to each Op.
-
-    Returns:
-      expected_backprops (Dict[int, defaultdict(set)]): dict mapping ID of `op`
-        to a defaultdict, which in turn maps the tensor index to the set of
-        downstream Ops that will backprop gradients to `op`.
-    """
-    queue = [self]
-    expected_backprops = dict()
-    while len(queue):
-      op = queue.pop(0)
-      for bp_index in op._bp_indices:
-        # `tensor` is an input of `op` that expects a backpropped gradient
-        tensor = op._input_list[bp_index]
-        if tensor.op.id not in expected_backprops:
-          expected_backprops[tensor.op.id] = defaultdict(set)
-        # record the set of IDs of Ops that will backprop gradients to `tensor`
-        # (can be uniquely identified by `op.id` and `tensor_index`)
-        expected_backprops[tensor.op.id][tensor.tensor_index].add(op.id)
-        queue.append(tensor.op)
-
-    return expected_backprops
-
-  def backprop(self, x_tensors, dy_tensors=None):
-    """Backprop gradients `dy_tensors` to each tensor in `x_tensors`.
-
-    Args:
-      x_tensors (List[Tensor]): list of tensors whose gradients are to be
-        returned.
-      dy_tensors (List[Tensor]): list of gradient tensors w.r.t. the outputs of
-        this Op. If None, defaults to tensors filled with ones.
-
-    Returns:
-      dx_tensors (List[Tensor]): List of gradient tensors backpropped to each
-        tensor in `x_tensors`.
-    """
-    from .generic_ops import OnesLike
-    from .math_ops import AddN
-
-    # if `dy_tensors` is not provided, defaults to all-one-tensors
-    if dy_tensors is None:
-      dy_tensors = [
-          OnesLike(input_list=[y_tensor]).output(0)
-          for y_tensor in self._outputs
-      ]
-
-    cum_grad = dict()
-    expected_backprops = self._compute_expected_backprops()
-    queue = [(self, dy_tensors)]
-
-    while len(queue):
-      op, dy_tensors = queue.pop(0)
-
-      # Ops without grad functions are treated as constants and hence ignored
-      if not hasattr(op, "_grad_func"):
-        continue
-
-      # make sure `dy_tensors` matches the output tensors of `op`
-      assert len(op._outputs) == len(dy_tensors)
-      for y_tensor, dy_tensor in zip(op._outputs, dy_tensors):
-        assert y_tensor.shape._compatible_with(dy_tensor.shape)
-
-      for tensor, grad_tensor in zip(
-          # list of input tensors to `op`
-          [op._input_list[bp_index] for bp_index in op._bp_indices],
-          # list of computed gradient tensors w.r.t. input tensors to `op`
-          op._grad_func(dy_tensors),
-      ):
-        assert tensor.shape._compatible_with(grad_tensor.shape)
-
-        if tensor.op.id not in cum_grad:
-          cum_grad[tensor.op.id] = defaultdict(list)
-        cum_grad[tensor.op.id][tensor.tensor_index].append(grad_tensor)
-
-        # when each tensor of an Op has received the expected number of
-        # backpropped gradients, compute the full gradient by adding them up,
-        # and enque the tuple (op, dy_tensors).
-        if all((
-            len(expected_backprops[tensor.op.id][tensor_index]) ==
-            len(cum_grad[tensor.op.id][tensor_index])
-        ) for tensor_index in expected_backprops[tensor.op.id].keys()):
-
-          dy_tensors = []
-          for tensor_index in sorted(cum_grad[tensor.op.id].keys()):
-            if len(cum_grad[tensor.op.id][tensor_index]) > 1:
-              grad_tensor = AddN(
-                  input_list=cum_grad[tensor.op.id][tensor_index],
-                  graph=self._graph,
-              ).output(0)
-            else:
-              grad_tensor = cum_grad[tensor.op.id][tensor_index][0]
-
-            dy_tensors.append(grad_tensor)
-            cum_grad[tensor.op.id][tensor_index] = [grad_tensor]
-          queue.append((tensor.op, dy_tensors))
-
-    dx_tensors = []
-    for x_tensor in x_tensors:
-      dx_tensors.append(cum_grad[x_tensor.op.id][x_tensor.tensor_index][0])
-    self._graph.cum_grad = cum_grad
-
-    return dx_tensors
-
   @property
   def name(self):
     return self._name
@@ -350,3 +245,163 @@ class Operation(object):
         self._graph._oneslike_tensors,
         tensor_index,
     )
+
+
+def _compute_expected_backprops(op):
+  """Traverse the graph from the `self` Op in the order of BFS, and count the
+  number of gradient tensors that will be backpropped to each Op.
+
+  Returns:
+    expected_backprops (Dict[int, defaultdict(set)]): dict mapping ID of `op`
+      to a defaultdict, which in turn maps the tensor index to the set of
+      downstream Ops that will backprop gradients to `op`.
+  """
+  queue = [op]
+  expected_backprops = dict()
+
+  while len(queue):
+    op = queue.pop(0)
+    for bp_index in op._bp_indices:
+      # `tensor` is an input of `op` that expects a backpropped gradient
+      tensor = op._input_list[bp_index]
+      if tensor.op.id not in expected_backprops:
+        expected_backprops[tensor.op.id] = defaultdict(set)
+      # record the set of IDs of Ops that will backprop gradients to `tensor`
+      # (can be uniquely identified by `op.id` and `tensor_index`)
+      expected_backprops[tensor.op.id][tensor.tensor_index].add(op.id)
+      queue.append(tensor.op)
+
+  return expected_backprops
+
+
+def backprop(y_tensors, x_tensors, dy_tensors=None):
+  """Backprop gradients `dy_tensors` to each tensor in `x_tensors`.
+
+  Args:
+    y_tensors (List[Tensor]): list of tensors from which gradients will be
+      backpropped.
+    x_tensors (List[Tensor]): list of tensors whose gradients are to be
+      returned.
+    dy_tensors (List[Tensor]): list of gradient tensors w.r.t. tensors in
+      `y_tensors`. If None, defaults to tensors filled with ones.
+
+  Returns:
+    dx_tensors (List[Tensor]): List of gradient tensors backpropped to each
+      tensor in `x_tensors`.
+  """
+  from .generic_ops import OnesLike
+  from .math_ops import AddN
+
+  # make sure `dy_tensors` matches `y_tensors`
+  if dy_tensors is not None:
+    assert len(y_tensors) == len(dy_tensors)
+    for y_tensor, dy_tensor in zip(y_tensors, dy_tensors):
+      y_tensor.shape._compatible_with(dy_tensor.shape)
+  else:
+    dy_tensors = [None] * len(y_tensors)
+
+  # sort `dy_tensors`
+  ops = list(set([y_tensor.op for y_tensor in y_tensors]))
+  dy_tensor_map = defaultdict(dict)  #dict()
+  for y_tensor, dy_tensor in zip(y_tensors, dy_tensors):
+    dy_tensor_map[y_tensor.op.id][y_tensor.tensor_index] = dy_tensor
+
+  # prepare grad tensors
+  # if dy_tensor is None, defaults to tensors filled with ones
+  grad_tensors = []
+  for op in ops:
+    for i, out_tensor in enumerate(op._outputs):
+      if i not in dy_tensor_map[op.id] or dy_tensor_map[op.id][i] is None:
+        grad_tensors.append(
+            OnesLike(
+                input_list=[out_tensor],
+                graph=y_tensors[0]._graph,
+            ).output(0),
+        )
+      else:
+        grad_tensors.append(dy_tensor_map[op.id][i])
+
+  if len(ops) > 1:
+    input_list = []
+    for op in ops:
+      input_list.extend(op._outputs)
+    op = _VirtualBackprop(input_list=input_list, graph=y_tensors[0].op._graph)
+  else:
+    op = ops[0]
+
+  expected_backprops = _compute_expected_backprops(op)
+  queue = [(op, grad_tensors)]
+  cum_grad = dict()
+
+  while len(queue):
+    op, dy_tensors = queue.pop(0)
+
+    # Ops without grad functions are treated as constants and hence ignored
+    if not hasattr(op, "_grad_func"):
+      continue
+
+    # make sure `dy_tensors` matches the output tensors of `op`
+    assert len(op._outputs) == len(dy_tensors)
+    for y_tensor, dy_tensor in zip(op._outputs, dy_tensors):
+      assert y_tensor.shape._compatible_with(dy_tensor.shape)
+
+    # list of input tensors to `op` that expect backpropped gradient
+    tensors = [op._input_list[bp_index] for bp_index in op._bp_indices]
+    # list of computed gradient tensors w.r.t. input tensors to `op`
+    grad_tensors = op._grad_func(dy_tensors)
+
+    assert len(tensors) == len(grad_tensors)
+    for tensor, grad_tensor in zip(tensors, grad_tensors):
+      assert tensor.shape._compatible_with(grad_tensor.shape)
+
+      if tensor.op.id not in cum_grad:
+        cum_grad[tensor.op.id] = defaultdict(list)
+      cum_grad[tensor.op.id][tensor.tensor_index].append(grad_tensor)
+
+      # when each tensor of an Op has received the expected number of
+      # backpropped gradients, compute the full gradient by adding them up,
+      # and enque the tuple (op, dy_tensors).
+      if all((
+          len(expected_backprops[tensor.op.id][tensor_index]) ==
+          len(cum_grad[tensor.op.id][tensor_index])
+      ) for tensor_index in expected_backprops[tensor.op.id].keys()):
+
+        dy_tensors = []
+        for tensor_index in sorted(cum_grad[tensor.op.id].keys()):
+          if len(cum_grad[tensor.op.id][tensor_index]) > 1:
+            grad_tensor = AddN(
+                input_list=cum_grad[tensor.op.id][tensor_index],
+                graph=tensor.op._graph,
+            ).output(0)
+          else:
+            grad_tensor = cum_grad[tensor.op.id][tensor_index][0]
+
+          dy_tensors.append(grad_tensor)
+          cum_grad[tensor.op.id][tensor_index] = [grad_tensor]
+        queue.append((tensor.op, dy_tensors))
+
+  dx_tensors = []
+  for x_tensor in x_tensors:
+    dx_tensors.append(cum_grad[x_tensor.op.id][x_tensor.tensor_index][0])
+
+  y_tensors[0].op.graph.cum_grad = cum_grad
+  return dx_tensors
+
+
+class _VirtualBackprop(Operation):
+
+  def _grad_func(self, in_grad_tensors):
+    out_grad_tensors = list(in_grad_tensors)
+    return out_grad_tensors
+
+  def _compute_shapes(self):
+    from .tensor_shape import TensorShape
+
+    return [
+        TensorShape(input_tensor.shape.raw_shape)
+        for input_tensor in self._input_list
+    ]
+
+  @property
+  def num_outputs(self):
+    return len(self._input_list)

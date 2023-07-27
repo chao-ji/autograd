@@ -1,4 +1,4 @@
-"""Defines Layer class as higher level abstraction for using variables."""
+"""Defines Layer class as higher level abstraction for managing variables."""
 from collections import namedtuple
 
 import numpy as np
@@ -35,14 +35,34 @@ Variable = namedtuple("Variable", ["weight", "handle", "trainable"])
 
 
 class Layer(object):
-  """Base class of all neural network layers."""
+  """Base class of all neural network layers.
+
+  Provides high-level abstraction for managing parameterized neural network
+  layers (i.e. layers with weights, like Conv2D). Sub-class must define methods:
+
+  * `build`: Add Op `CreateVariable` to the graph that creates the variable, and
+    runs its. Then add Op `ReadVariable` that reads the value of the variable in
+    a given `Runtime`.
+
+  * `__call__`: Add Ops to the graph that connect the input tensor to the output
+    tensor(s).
+  """
 
   def __init__(
       self,
       activation=None,
-      kernel_initializer=None,
-      bias_initializer=None,
+      kernel_initializer="glorot_uniform",
+      bias_initializer="zeros",
   ):
+    """Constructor.
+
+    Args:
+      activation (str or callable): activation function. If None, no activation
+        will be applied.
+      kernel_initializer (str or callable): kernel initializer. Defaults to
+        "glorot_uniform".
+      bias_initializer (str or callable): bias initializer. Defaults to "zeros".
+    """
     self._variables = []
     if callable(activation):
       self._activation = activation
@@ -56,14 +76,20 @@ class Layer(object):
     elif isinstance(kernel_initializer, str):
       self._kernel_initializer = INITIALIZERS[kernel_initializer]()
     else:
-      self._kernel_initializer = None
+      raise ValueError(
+          f"kernel initializer is either callable or str, but got "
+          "type{kernel_initializer}",
+      )
 
     if callable(bias_initializer):
       self._bias_initializer = bias_initializer
     elif isinstance(bias_initializer, str):
       self._bias_initializer = INITIALIZERS[bias_initializer]()
     else:
-      self._bias_initializer = None
+      raise ValueError(
+          f"bias initializer is either callable or str, but got "
+          "type{bias_initializer}",
+      )
 
   @property
   def variables(self):
@@ -74,6 +100,14 @@ class Layer(object):
     return self._variables
 
   def get_variable_weight(self, index):
+    """Return the value of the variable with the provided index.
+
+    Args:
+      index (int): index of the variable.
+
+    Returns:
+      variable_weight (numpy array): the value of the variable.
+    """
     assert index in self._variables
     runtime = self._variables[index].weight.op._graph._runtime
     return runtime.get_variable_value(
@@ -81,6 +115,17 @@ class Layer(object):
     )
 
   def _build(self, shape_list, init_fn_list, flag_list, trainable_list):
+    """Create the list of variables using provided config.
+
+    Args:
+      shape_list (List[tuple]): list of variable shapes.
+      init_fn_list (List[callable]): list of callable that initializes variables
+        given its shape.
+      flag_list (List[bool]): list of flags indicating whether to create the
+        variable (True) or not (False).
+      trainable_list (List[bool]): list of flags indicating if variable is
+        trainable.
+    """
     for shape, init_fn, flag, trainable in zip(
         shape_list,
         init_fn_list,
@@ -90,16 +135,17 @@ class Layer(object):
       if not flag:
         continue
 
+      # Add the Op `CreateVariable` and actually run it.
       create_var = CreateVariable(shape, init_fn)
       create_var.run()
 
-      read_var = ReadVariable(input_list=[create_var.output(0)]).output(0)
+      read_var = ReadVariable(input_list=[create_var.output(0)])
 
       runtime = create_var._graph._runtime
 
       self._variables.append(
           Variable(
-              weight=read_var,
+              weight=read_var.output(0),
               handle=create_var.output(0),
               trainable=trainable,
           ),

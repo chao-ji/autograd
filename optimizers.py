@@ -1,5 +1,7 @@
 import numpy as np
 
+from .operation import backprop as _backprop
+
 
 class Optimizer(object):
   """Base class of all Optimizers.
@@ -29,7 +31,7 @@ class Optimizer(object):
     var_weights = list(list(zip(*variables))[0])
     var_handles = list(list(zip(*variables))[1])
 
-    gradients = tensor.op.backprop(x_tensors=var_weights)
+    gradients = _backprop([tensor], var_weights)
     grads_and_vars = list(zip(gradients, var_handles))
     return grads_and_vars
 
@@ -51,7 +53,7 @@ class GradientDescentOptimizer(Optimizer):
       grad_value = runtime.get_tensor_value(grad).astype("float32")
 
       runtime.set_variable_value(
-          var_id, var_value - self._params["alpha"] * grad_value
+          var_id, var_value - self._params["alpha"] * grad_value,
       )
 
 
@@ -83,10 +85,14 @@ class AdamOptimizer(Optimizer):
         numpy array, and variable is a Node instance.
     """
     alpha, beta1, beta2, epsilon = (
-        np.asarray(self._params['alpha'],
-                   "float32"), np.asarray(self._params['beta1'], "float32"),
-        np.asarray(self._params['beta2'],
-                   "float32"), np.asarray(self._params['epsilon'], "float32")
+        np.asarray(
+            self._params['alpha'],
+            "float32",
+        ), np.asarray(self._params['beta1'], "float32"),
+        np.asarray(
+            self._params['beta2'],
+            "float32",
+        ), np.asarray(self._params['epsilon'], "float32"),
     )
     t = self._t + 1
     m = self._m
@@ -100,13 +106,15 @@ class AdamOptimizer(Optimizer):
       var_value = runtime.get_variable_value(var_id).astype("float32")
       grad_value = runtime.get_tensor_value(grad).astype("float32")
 
-      m[var_id] = beta1 * m.get(var_id, np.zeros(var_shape, dtype="float32")
-                               ) + (1 - beta1) * grad_value
-      v[var_id] = beta2 * v.get(var_id, np.zeros(var_shape, dtype="float32")
-                               ) + (1 - beta2) * grad_value * grad_value
+      m[var_id] = beta1 * m.get(
+          var_id, np.zeros(var_shape, dtype="float32"),
+      ) + (1 - beta1) * grad_value
+      v[var_id] = beta2 * v.get(
+          var_id, np.zeros(var_shape, dtype="float32"),
+      ) + (1 - beta2) * grad_value * grad_value
       runtime.set_variable_value(
           var_id,
-          var_value - alpha_t * m[var_id] / (np.sqrt(v[var_id]) + epsilon)
+          var_value - alpha_t * m[var_id] / (np.sqrt(v[var_id]) + epsilon),
       )
 
     self._m = m
@@ -142,7 +150,7 @@ class RMSPropOptimizer(Optimizer):
     """
     alpha, rho, momentum, epsilon = (
         self._params['alpha'], self._params['rho'], self._params['momentum'],
-        self._params['epsilon']
+        self._params['epsilon'],
     )
 
     mean_square = self._mean_square
@@ -168,7 +176,7 @@ class RMSPropOptimizer(Optimizer):
       )
 
       moment[var_id] = momentum * moment.get(
-          var_id, np.zeros(var_shape)
+          var_id, np.zeros(var_shape),
       ) + alpha * grad_value / (
           np.sqrt(mean_square[var_id]) + epsilon
       )
