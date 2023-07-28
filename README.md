@@ -40,7 +40,7 @@ To "carry out the computation" simply means to execute a specific Op in the grap
   <img src="g3doc/files/fig1.png" width="600">
   <br>
   <br>
-  Example of a computational graph.
+  Example of a computational graph. Colored (blue) rectangles represent Ops, small black circles underneath and above Ops are input and output tensors, respectively.
 </p>
 
 ### Runtime
@@ -49,7 +49,7 @@ As we just showed, the execution of an Op requires the concrete values (numpy ar
 
 ### Backpropagation
 
-For an Op that has `m` inputs and generates `n` outputs, it is expected to receive `n` gradient Tensors from its downstream Ops. A `_grad_func` is defined for each Op that takes the `m` input and `n` gradient Tensors (or a subset of them), and adds additional Ops to the graph that computes the gradient tensors. For example, in the following digram, the blue circle on the left represents a single Op with `m` inputs and `n` outputs, and the pink circle on the right represent a "subgraph": containing potentially multiple Ops that eventually leads to gradient tensor with respect to each of the `m` input tensors.
+For an Op that has `m` inputs and generates `n` outputs, it is expected to receive `n` gradient Tensors from its downstream Ops. A `_grad_func` is defined for each Op that takes the `m` input and `n` gradient Tensors (or a subset of them), and adds additional Ops to the graph that computes the gradient tensors. For example, in the following digram, the blue rectangle on the left represents a single Op with `m` inputs and `n` outputs, and the pink rectangle on the right represent a "subgraph": containing potentially multiple Ops that eventually leads to gradient tensor with respect to each of the `m` input tensors.
 
 <p align="center">
   <img src="g3doc/files/fig2.png" width="600">
@@ -64,10 +64,10 @@ If a Tensor is consumed by more than one downstream Op, a gradient tensor will b
   <img src="g3doc/files/fig4.png" width="600">
   <br>
   <br>
-  Add up backpropped gradient tensors to compute the full gradient
+  Tensor "OpA:0" expects two backpropped gradient tensors ("dOpB:0" and "dOpC:0"). The full gradient will be the sum of them.
 </p>
 
-The following is an example of computing gradients (and gradients or gradients) of a graph. First, the three blue circles represent the graph of three Ops, which simply computes the dot product of two tensors `A` and `B` of shape `[2, 3]` and `[3, 5]`, respectively. Second, the two pink circles represent the graph with additional Ops, computing the gradient of `C` with respect to `A`, i.e. `Grad(C, A)`. Finally, we further add two Ops (yellow) to compute the gradient of `Grad(C, A)` withe respect to `B`, i.e. `Grad(Grad(C, A), B)`.
+The following is an example of computing gradients (and gradients or gradients) of a graph. First, the three blue rectangles represent the graph of three Ops, which simply computes the dot product of two tensors `A` and `B` of shape `[2, 3]` and `[3, 5]`, respectively. Second, the two pink rectangles represent the graph with additional Ops, computing the gradient of `C` with respect to `A`, i.e. `Grad(C, A)`. Finally, we further add two Ops (yellow) to compute the gradient of `Grad(C, A)` withe respect to `B`, i.e. `Grad(Grad(C, A), B)`.
 
 <p align="center">
   <img src="g3doc/files/fig3.png" width="600">
@@ -190,15 +190,15 @@ To backprop gradient from a tensor `t` to any other tensor `s`, where there is "
 
 ```python
 # `grads` is a list holding a Tensor of the same shape as `s`
-grads = t.backprop(x_tensors=[s])
+grads = ag.backprop(y_tensors=[t], x_tensors=[s])
 ```
 The gradient defaults to a tensor of the same shape as `t` and filled with ones.
 
-You can also provide specific values of the the backpropped gradient by calling
+You can also provide specific values of the the backpropped gradient by setting argument `dy_tensors`:
 
 ```python
 t_backward_value = ag.ones_like(t) # `t_backward_value` is the backpropped gradient
-grads = t.backprop(x_tensors=[s], dy_tensor=t_backward_value)
+grads = ag.backprop(y_tensors=[t], x_tensors=[s], dy_tensors=[t_backward_value])
 ```
 
 
@@ -217,11 +217,11 @@ c = ag.matmul(a, b)
 
 # Backprop gradient of `c` (defaults to ag.ones((2, 5))) to `a`
 # grads[0]: [<Tensor 'MatMul_1:0', shape=(2, 3)>]
-grads = c.backprop([a])
+grads = ag.backprop([c], [a])
 
 # Backprop gradient of `grads[0]` (defaults to ag.ones((2, 3))) to `b`
 # grads_grads: [<Tensor 'MatMul_4:0', shape=(3, 5)>]
-grads_grads = grads[0].backprop([b])
+grads_grads = ag.backprop([grads[0]], [b])
 
 runtime = ag.get_default_graph().runtime
 
@@ -233,6 +233,26 @@ print(runtime.get_tensor_value(grads_grads[0]))
 # array([[2., 2., 2., 2., 2.],
 #        [2., 2., 2., 2., 2.],
 #        [2., 2., 2., 2., 2.]], dtype=float32)
+```
+
+You can even backprop gradients from multiple `y_tensors` at the same time:
+
+```python
+# d.shape: (2, 5)
+d = ag.reduce_sum(c, axis=1)
+e = ag.reduce_prod(c, axis=0)
+
+# backprop from `d` and `e` back to `a` and `b`
+multi_y_grads = ag.backprop(y_tensors=[d, e], x_tensors=[a, b])
+
+print(runtime.get_tensor_value(multi_y_grads[0]))
+# array([[1070., 3445., 5820.],
+#        [ 350., 1150., 1950.]], dtype=float32)
+
+print(runtime.get_tensor_value(multi_y_grads[1]))
+# array([[ 78.,  87.,  96., 105., 114.],
+#        [175., 199., 223., 247., 271.],
+#        [272., 311., 350., 389., 428.]], dtype=float32)
 ```
 
 ## Examples

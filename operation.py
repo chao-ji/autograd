@@ -315,7 +315,7 @@ def backprop(y_tensors, x_tensors, dy_tensors=None):
         grad_tensors.append(
             OnesLike(
                 input_list=[out_tensor],
-                graph=y_tensors[0]._graph,
+                graph=y_tensors[0].op._graph,
             ).output(0),
         )
       else:
