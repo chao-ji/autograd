@@ -3,12 +3,12 @@
 
 ## Introduction
 
-This is a project that I've been contemplating over the years but not able to finish until just recently (mid 2023). The motivation was to demystify how backpropagation algorithm works in machine learning libraries like TensorFlow, which allows you to take a differentiable computational graph and efficiently compute the gradients (first or higher order). The basic idea is to try to build a "mini" framework from the ground up based on the general principles of differentiation and the chain rule of derivatives. By "mini" I mean I try to keep the implementation as minimal as possible by focusing on components that are necessary for defining the graph and computing gradients, so that the codebase is much more readable than a full-fledged library. That said, the collection of Operations is still reasonably expressive (support math, neural network, N-D array, and data flow operations), which allows you to build common model architectures and can be tested on standard benchmark datasets like MNIST.
+This is a project that I've been contemplating over the years but not able to finish until just recently. The motivation was to demystify how backpropagation algorithm works in machine learning libraries like TensorFlow, which allows you to take a differentiable computational graph and efficiently compute the gradients (first or higher order). The basic idea is to try to build a "mini" framework from the ground up based on the general principles of differentiation and the chain rule of derivatives. By "mini" I mean I try to keep the implementation as minimal as possible by focusing on components that are necessary for defining the graph and computing gradients, so that the codebase is much more readable than a full-fledged library. That said, the collection of Operations in the current version (as of mid 2023) is still reasonably expressive (support math, neural network, N-D array, and data flow operations), which allows you to build common model architectures and can be tested on standard benchmark datasets like [MNIST](http://yann.lecun.com/exdb/mnist/).
 
 
 ## Design
 
-This section briefly discusses the implementation details. Proceed to [Quick Start](## Quick Start) if not interested.
+This section briefly discusses the implementation details. Proceed to [Quick Start](##Quick Start) if not interested.
 
 ### Graph, Operations and Tensors
 
@@ -25,8 +25,8 @@ Note that
 1. Tensors cannot be created out of thin air --- a Tensor is always emitted by a specific "parent" Op.
 2. An Op may receive >= 0 Tensors as inputs and generate >= 0 output Tensors.
 3. A Tensor can be uniquely identified by
- * the ID of its parent Op
- * its index in the output list of the parent Op
+ * the ID of its parent Op: `Tensor.op`
+ * its index in the output list of the parent Op: `Tensor.tensor_index`
 4. Some Ops does not require an input. For example, a `Const` (constant) Op spits out a Tensor whose value is provided at graph construction time.
 5. Some Ops may have "side-effects". For example, an `AssignVariable` Op will modify the value of variables in the `Runtime` environment.
 
@@ -93,6 +93,7 @@ On top of the above files, the following files provide interfaces for higher lev
 * `optimizers.py`: Optimization algorithms for updating weights (e.g. Adam)
 * `initializers.py`: Common initialization algorithms (e.g. glorot uniform)
 * `mixins`: mix-in classes for `Operation`s
+
 
 ## Installation
 
@@ -170,11 +171,13 @@ with graph.as_default_graph():
 
 # We use `Runtime` object to set `Placeholder` values and get the value of the result `Tensor`.
 
+# `Placeholder` type of Tensors have `set_value` method to set their values in Runtime:
 import numpy as np
-runtime.set_placeholder_value(a.op.id, np.arange(3).reshape(1, 3))
-runtime.set_placeholder_value(b.op.id, np.ones((1, 3)))
+a.set_value(np.arange(3).reshape(1, 3))
+b.set_value(np.ones((1, 3)))
 
-print(runtime.get_tensor_value(c))
+# All `Tensor`s have `eval` instance method to retrieve their actual values in Runtime:
+print(c.eval())
 # output: array([[1., 2., 3.]])
 
 # call `reset()` to reset the values of all tensors in a graph, so we can feed new values to `Placeholder`s and re-run the graph.
@@ -223,19 +226,17 @@ grads = ag.backprop([c], [a])
 # grads_grads: [<Tensor 'MatMul_4:0', shape=(3, 5)>]
 grads_grads = ag.backprop([grads[0]], [b])
 
-runtime = ag.get_default_graph().runtime
-
-print(runtime.get_tensor_value(grads[0]))
+print(grads[0].eval())
 #array([[10., 35., 60.],
 #       [10., 35., 60.]], dtype=float32)
 
-print(runtime.get_tensor_value(grads_grads[0]))
+print(grads_grads[0].eval())
 # array([[2., 2., 2., 2., 2.],
 #        [2., 2., 2., 2., 2.],
 #        [2., 2., 2., 2., 2.]], dtype=float32)
 ```
 
-You can even backprop gradients from multiple `y_tensors` at the same time:
+You can even backprop gradients from *multiple* `y_tensors` at the same time:
 
 ```python
 # d.shape: (2, 5)
@@ -245,14 +246,25 @@ e = ag.reduce_prod(c, axis=0)
 # backprop from `d` and `e` back to `a` and `b`
 multi_y_grads = ag.backprop(y_tensors=[d, e], x_tensors=[a, b])
 
-print(runtime.get_tensor_value(multi_y_grads[0]))
+print(multi_y_grads[0].eval())
 # array([[1070., 3445., 5820.],
 #        [ 350., 1150., 1950.]], dtype=float32)
 
-print(runtime.get_tensor_value(multi_y_grads[1]))
+print(multi_y_grads[1].eval())
 # array([[ 78.,  87.,  96., 105., 114.],
 #        [175., 199., 223., 247., 271.],
 #        [272., 311., 350., 389., 428.]], dtype=float32)
+```
+
+### Layers
+
+Layers are *stateful* subgraphs that connect input tensor to output tensor, where the *states* are the tunable variables. For example, `Conv2D` layer has a filter variable and a bias variable (optional).
+
+```python
+import autograd as ag
+
+dense = ag.layers.Dense()
+
 ```
 
 ## Examples

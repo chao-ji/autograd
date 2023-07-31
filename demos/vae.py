@@ -115,7 +115,6 @@ if __name__ == "__main__":
   epochs = 10
 
   # build the graph
-  graph = ag.get_default_graph()
   encoder = Encoder(latent_dim)
   decoder = Decoder()
 
@@ -182,19 +181,13 @@ if __name__ == "__main__":
       if i % 100 == 0:
         print(i)
       sys.stdout.flush()
-      graph.runtime.set_placeholder_value(
-          images.op.id, next(train_data_generator),
-      )
-      optimizer.apply_gradients(grads_and_vars, graph.runtime)
-      graph.runtime.reset()
+      images.set_value(next(train_data_generator))
+      optimizer.apply_gradients(grads_and_vars, reset_runtime=True)
 
     losses = []
     for i in np.arange(test_size // batch_size):
-      graph.runtime.set_placeholder_value(
-          images.op.id, next(test_data_generator),
-      )
-      losses.append(graph.runtime.get_tensor_value(loss))
-      graph.runtime.reset()
+      images.set_value(next(test_data_generator))
+      losses.append(loss.eval())
 
     print("loss", epoch, -np.mean(losses))
 

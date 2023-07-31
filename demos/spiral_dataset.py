@@ -1,13 +1,13 @@
 import os
 
-import autograd as ag
 import matplotlib.pyplot as plt
 import numpy as np
+
+import autograd as ag
 
 random_state = np.random.RandomState(0)
 
 if __name__ == "__main__":
-  graph = ag.get_default_graph()
 
   num_features = 2  # 2 features
   num_classes = 3  # number of classes
@@ -98,20 +98,16 @@ if __name__ == "__main__":
   # training loops
   for i in np.arange(10000):
 
-    graph.runtime.set_placeholder_value(inputs.op.id, x_train)
-    graph.runtime.set_placeholder_value(labels.op.id, y_train)
+    inputs.set_value(x_train)
+    labels.set_value(y_train)
 
     if i % 1000 == 0:
-      print('step: %d, loss: %f' % (i, graph.runtime.get_tensor_value(loss)))
+      print('step: %d, loss: %f' % (i, loss.eval()))
 
-    gd.apply_gradients(grads_and_vars, graph.runtime)
-    graph.runtime.reset()
+    gd.apply_gradients(grads_and_vars, reset_runtime=True)
 
-  graph.runtime.set_placeholder_value(inputs.op.id, x_test)
+  inputs.set_value(x_test)
   print(
       'test accuracy:',
-      np.mean(
-          np.argmax(graph.runtime.get_tensor_value(logits), axis=1) ==
-          np.argmax(y_test, axis=1),
-      ),
+      np.mean(np.argmax(logits.eval(), axis=1)==np.argmax(y_test, axis=1)),
   )

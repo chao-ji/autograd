@@ -17,7 +17,7 @@ if __name__ == "__main__":
 
   generator.load_variable_weights("gp_weights/weights_12000.npy")
 
-  preds = graph.runtime.get_tensor_value(fake_images)
+  preds = fake_images.eval()
   graph.runtime.reset()
 
   fig = plt.figure(figsize=(10, 10))

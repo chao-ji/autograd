@@ -120,7 +120,6 @@ if __name__ == "__main__":
   batch_size = 50
 
   # build the graph
-  graph = ag.get_default_graph()
   noises = ag.random_normal([batch_size, noise_dim])
   real_images = ag.placeholder(shape=[batch_size, 28, 28, 1])
   epsilon = ag.random_uniform([batch_size, 1, 1, 1])
@@ -193,32 +192,16 @@ if __name__ == "__main__":
   # training loops
   for i in np.arange(15001):
     for j in np.arange(5):
-      graph.runtime.set_placeholder_value(
-          real_images.op.id,
-          next(data_generator),
-      )
-
-      optimizer_d.apply_gradients(grads_and_vars_d, graph.runtime)
-      graph.runtime.reset()
-
-    optimizer_g.apply_gradients(grads_and_vars_g, graph.runtime)
-    graph.runtime.reset()
+      real_images.set_value(next(data_generator))
+      optimizer_d.apply_gradients(grads_and_vars_d, reset_runtime=True)
+    optimizer_g.apply_gradients(grads_and_vars_g, reset_runtime=True)
 
     if i % 100 == 0:
       print("i", i)
-      graph.runtime.set_placeholder_value(
-          real_images.op.id,
-          next(data_generator),
-      )
+      real_images.set_value(next(data_generator))
 
-      print(
-          "discriminator_loss:",
-          graph.runtime.get_tensor_value(discriminator_loss),
-      )
-      graph.runtime.reset()
-
-      print("generator_loss:", graph.runtime.get_tensor_value(generator_loss))
-      graph.runtime.reset()
+      print("discriminator_loss:", discriminator_loss.eval())
+      print("generator_loss:", generator_loss.eval())
       sys.stdout.flush()
       print()
 

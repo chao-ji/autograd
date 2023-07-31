@@ -5,8 +5,9 @@ import numpy as np
 
 from .generic_ops import Const
 from .initializers import (
-    GlorotNormalInitializer, GlorotUniformInitializer, HeNormalInitializer,
-    HeUniformInitializer, OnesInitializer, RandomUniformInitializer,
+    GlorotNormalInitializer, GlorotUniformInitializer,
+    HeNormalInitializer, HeUniformInitializer,
+    OnesInitializer, RandomUniformInitializer,
     TruncatedNormalInitializer, ZerosInitializer,
 )
 from .math_ops import Add
@@ -111,7 +112,7 @@ class Layer(object):
     assert index in self._variables
     runtime = self._variables[index].weight.op._graph._runtime
     return runtime.get_variable_value(
-        runtime.get_tensor_value(self._variables[index].handle).item().id,
+        self._variables[index].handle.eval().item().id,
     )
 
   def _build(self, shape_list, init_fn_list, flag_list, trainable_list):
@@ -155,7 +156,7 @@ class Layer(object):
     assert len(self.variables) > 0
     runtime = self.variables[0].weight.op._graph._runtime
     vids = [
-        runtime.get_tensor_value(v.handle).item().id for v in self.variables
+        v.handle.eval().item().id for v in self.variables
     ]
     variable_values = np.asarray(
         [runtime.get_variable_value(vid) for vid in vids],
@@ -169,7 +170,7 @@ class Layer(object):
 
     runtime = self.variables[0].weight.op._graph._runtime
     for i, v in enumerate(self.variables):
-      vid = runtime.get_tensor_value(v.handle).item().id
+      vid = v.handle.eval().item().id
       runtime.set_variable_value(vid, weights[i])
 
 

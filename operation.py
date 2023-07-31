@@ -63,7 +63,7 @@ class Operation(object):
     input_tensor_values = []
     for tensor in self._input_list:
       tensor.op.run()  # make sure all depending ops have been executed
-      value = self._graph._runtime.get_tensor_value(tensor)
+      value = tensor.eval()
       input_tensor_values.append(value)
 
     # run dependent ops if any
@@ -117,7 +117,7 @@ class Operation(object):
     Returns:
       outputs (List[Tensor]): the created Tensor instances.
     """
-    from .tensor import Tensor
+    from .tensor import Placeholder, Tensor
 
     if not hasattr(self, "_outputs"):
       shapes = self._compute_shapes()
@@ -125,11 +125,14 @@ class Operation(object):
         # For Ops with no output tensors, set `self._outputs` to empty list.
         self._outputs = []
       else:
-        # Assign tensor index and shape to each Tensor.
-        self._outputs = [
-            Tensor(self, i, shape)
-            for i, shape in zip(range(self.num_outputs), shapes)
-        ]
+        if self.type != "Placeholder":
+          # Assign tensor index and shape to each Tensor.
+          self._outputs = [
+              Tensor(self, i, shape)
+              for i, shape in zip(range(self.num_outputs), shapes)
+          ]
+        else:
+          self._outputs = [Placeholder(self, 0, shapes[0])]
     return self._outputs
 
   def output(self, index=0):

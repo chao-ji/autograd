@@ -182,6 +182,24 @@ class Tensor(object):
     tensor = StridedSlice(input_list=[tensor, begin, end, strides]).output(0)
     return tensor
 
+  def eval(self):
+    self.op.run()
+    runtime = self.op.graph.runtime
+    tensor_value = runtime._values[self.op.id][self.tensor_index]
+    return tensor_value
+
+
+class Placeholder(Tensor):
+
+  def set_value(self, value):
+    """Set the value to be used by the placeholder at runtime.
+
+    Args:
+      value (numpy array like): value convertible to numpy array.
+    """
+    runtime = self.op.graph.runtime
+    runtime._placeholder_values[self.op.id] = value
+
 
 def _build_vector_from_mixed(mixed):
   from .array_ops import Pack

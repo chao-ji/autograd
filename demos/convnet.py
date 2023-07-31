@@ -2,8 +2,9 @@
 import gzip
 import os
 
-import autograd as ag
 import numpy as np
+
+import autograd as ag
 
 random_state = np.random.RandomState(0)
 
@@ -161,23 +162,18 @@ if __name__ == "__main__":
   iterations = 1000
   for i in np.arange(iterations):
     batch_labels, batch_images = next(train_data_generator)
-    graph.runtime.set_placeholder_value(inputs.op.id, batch_images)
-    graph.runtime.set_placeholder_value(labels.op.id, batch_labels)
+    inputs.set_value(batch_images)
+    labels.set_value(batch_labels)
 
     if i % 100 == 0:
-      print(f"step: {i}, loss: {graph.runtime.get_tensor_value(loss)}")
+      print(f"step: {i}, loss: {loss.eval()}")
 
-    adam.apply_gradients(grads_and_vars, graph.runtime)
-    graph.runtime.reset()
+    adam.apply_gradients(grads_and_vars, reset_runtime=True)
 
     if i % 100 == 0:
       assert len(
           graph.runtime._values,
       ) == 0 and len(graph.runtime._placeholder_values) == 0
-      graph.runtime.set_placeholder_value(inputs.op.id, test_images)
-      print((
-          graph.runtime.get_tensor_value(preds).argmax(
-              axis=1,
-          ) == test_labels.argmax(axis=1)
-      ).mean())
+      inputs.set_value(test_images)
+      print((preds.eval().argmax(axis=1) == test_labels.argmax(axis=1)).mean())
       graph.runtime.reset()
