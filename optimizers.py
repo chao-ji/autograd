@@ -57,7 +57,8 @@ class GradientDescentOptimizer(Optimizer):
       runtime.set_variable_value(
           var_id, var_value - self._params["alpha"] * grad_value,
       )
-    runtime.reset()
+    if reset_runtime:
+      runtime.reset()
 
 
 class AdamOptimizer(Optimizer):
@@ -126,7 +127,8 @@ class AdamOptimizer(Optimizer):
     self._m = m
     self._v = v
     self._t = t
-    runtime.reset()
+    if reset_runtime:
+      runtime.reset()
 
 
 class RMSPropOptimizer(Optimizer):
@@ -186,4 +188,5 @@ class RMSPropOptimizer(Optimizer):
 
     self._mean_square = mean_square
     self._moment = moment
-    runtime.reset()
+    if reset_runtime:
+      runtime.reset()
