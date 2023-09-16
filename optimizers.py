@@ -1,3 +1,4 @@
+"""Defines gradiant-based optimizers."""
 import numpy as np
 
 from .operation import backprop as _backprop
@@ -27,6 +28,17 @@ class Optimizer(object):
       return '<%s>' % type(self).__name__
 
   def compute_gradients(self, tensor, variables):
+    """Compute the gradients w.r.t. the variables.
+
+    Args:
+      tensor (Tensor): the Tensor from which gradients will be backpropped (
+        i.e. the loss Tensor).
+      variables (List[Variable]): list of `Variable`s.
+
+    Returns:
+      grads_and_vars (List[Tuple[Tensor, Tensor]]): list of (gradient,
+        creator_id) tuples.
+    """
     variables = [(v.weight, v.handle) for v in variables if v.trainable]
     var_weights = list(list(zip(*variables))[0])
     var_handles = list(list(zip(*variables))[1])
@@ -43,14 +55,14 @@ class GradientDescentOptimizer(Optimizer):
     """Apply the computed gradient w.r.t. trainable variables.
 
     Args:
-      grads_and_vars: a list of (gradient, variable) pairs, where gradient is
-        numpy array, and variable is a Node instance.
-      reset_runtime (bool): whether to reset runtime after variables are updated
-        . Defaults to True.
+      grads_and_vars (List[Tuple[Tensor, Tensor]]): list of (gradient,
+        creator_id) tuples.
+      reset_runtime (bool): (Optional) whether to reset runtime after variables
+        are updated. Defaults to True.
     """
     runtime = grads_and_vars[0][0].op.graph.runtime
     for grad, var in grads_and_vars:
-      var_id = var.eval().item().id
+      var_id = int(var.eval())
       var_value = runtime.get_variable_value(var_id).astype("float32")
       grad_value = grad.eval().astype("float32")
 
@@ -85,10 +97,10 @@ class AdamOptimizer(Optimizer):
     """Apply the computed gradient w.r.t. trainable variables.
 
     Args:
-      grads_and_vars: a list of (gradient, variable) pairs, where gradient is
-        numpy array, and variable is a Node instance.
-      reset_runtime (bool): whether to reset runtime after variables are updated
-        . Defaults to True.
+      grads_and_vars (List[Tuple[Tensor, Tensor]]): list of (gradient,
+        creator_id) tuples.
+      reset_runtime (bool): (Optional) whether to reset runtime after variables
+        are updated. Defaults to True.
     """
     alpha, beta1, beta2, epsilon = (
         np.asarray(
@@ -108,10 +120,10 @@ class AdamOptimizer(Optimizer):
 
     runtime = grads_and_vars[0][0].op.graph.runtime
     for grad, var in grads_and_vars:
-      var_id = var.eval().item().id
-      var_shape = var.eval().item().shape
+      var_id = int(var.eval())
       var_value = runtime.get_variable_value(var_id).astype("float32")
       grad_value = grad.eval().astype("float32")
+      var_shape = var_value.shape
 
       m[var_id] = beta1 * m.get(
           var_id, np.zeros(var_shape, dtype="float32"),
@@ -154,10 +166,10 @@ class RMSPropOptimizer(Optimizer):
     """Apply the computed gradient w.r.t. trainable variables.
 
     Args:
-      grads_and_vars: a list of (gradient, variable) pairs, where gradient is
-        numpy array, and variable is a Node instance.
-      reset_runtime (bool): whether to reset runtime after variables are updated
-        . Defaults to True.
+      grads_and_vars (List[Tuple[Tensor, Tensor]]): list of (gradient,
+        creator_id) tuples.
+      reset_runtime (bool): (Optional) whether to reset runtime after variables
+        are updated. Defaults to True.
     """
     alpha, rho, momentum, epsilon = (
         self._params['alpha'], self._params['rho'], self._params['momentum'],

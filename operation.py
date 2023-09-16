@@ -7,7 +7,50 @@ from .containers import get_default_graph
 
 
 class Operation(object):
-  """Base class for all Ops."""
+  """Base class for all Ops.
+
+  An Operation performs a specific type of computation given >=0 input symbolic
+  Tensors, and generates >=0 output symbolic Tensors. An Op is always registered
+  in a `Graph`, and it is identified by a unique ID number within the scope of a
+  `Graph`. The type of computation is indicated by its `type` attribute (e.g.
+  "Add", "Conv2D").
+
+  The constructor takes as input a list of Tensors, and optionally a list of
+  dependent Ops (those that must be run prior to this Op). It registers itself
+  in the parent `Graph`, and generates a list of output symbolic Tensors (See
+  the method `__init__` below).
+
+  Each Op defines a `_run` method which carries out the actual computation at
+  runtime (See the abstract method `_run` below).
+
+  Optionally, an Op may have a `_grad_func` method for backpropagation:
+
+    def _grad_func(self, in_grad_tensors):
+      '''Add Ops to the graph that lead to the gradient Tensors w.r.t. the input
+      Tensors of this Op.
+
+      Args:
+        in_grad_tensors (List[Tensor]): gradient Tensors w.r.t. the output
+          Tensors of this Op.
+
+      Returns:
+        out_grad_tensors (List[Tensor]): gradient Tensors w.r.t. the input
+          Tensors of this Op.
+      '''
+  """
+
+  def _run(self, *input_tensor_values):
+    """Compute the value of output tensors.
+
+    Args:
+      input_tensor_values (List[nd.array]): input numpy arrays
+
+    Returns:
+      numpy array or list of numpy array
+    """
+    raise NotImplementedError(
+        "Must be overridden by subclasses (i.e. concrete Ops)",
+    )
 
   def __init__(self, graph=None, input_list=[], dependent_ops=[], name=None):
     """Constructor.
@@ -24,17 +67,17 @@ class Operation(object):
     """
     self._graph = get_default_graph() if graph is None else graph
     self._input_list = input_list
+    self._dependent_ops = dependent_ops
     self._graph.add_op(op=self, name=name)
     self._bp_indices = self._get_bp_indices()
     self._outputs = self._create_output_tensors()
-    self._dependent_ops = dependent_ops
 
   def _get_bp_indices(self):
     """Returns the indices of input tensors that expect a backpropped gradient
-    tensor. Can be overrided by subclasses.
+    tensor. Can be overridden by subclasses.
 
     If an Op does not have a `_grad_func`, then its output tensors are treated
-    as "constants", hence no gradient will be backpropped to its input tensors.
+    as "constants", so no gradient will be backpropped to its input tensors.
 
     Returns:
       bp_indices (List[int]): list of indices of input tensors that expect
@@ -55,7 +98,8 @@ class Operation(object):
 
   def run(self):
     """Compute the value of the tensors coming out of this op."""
-    # avoid re-running this op
+    # avoid re-running this op, if the Op is immutable or its value has already
+    # been computed
     if not self.mutable and self.id in self._graph._runtime._values:
       return
 
@@ -70,13 +114,13 @@ class Operation(object):
     for op in self._dependent_ops:
       op.run()
 
-    # run this op using the actual tensor values from depending ops
+    # run this op using the actual values of input tensors
     outputs = self._run(*input_tensor_values)
 
     if self.mutable:
       self._graph._runtime._values[self.id] = []
 
-    # save the output tensor values from this op to the runtime
+    # cache the output tensor values from this op in the runtime
     if isinstance(outputs, (list, tuple)):
       self._graph._runtime._values[self.id].extend(list(outputs))
     elif outputs is not None:
@@ -101,6 +145,7 @@ class Operation(object):
 
   @property
   def num_outputs(self):
+    """Number of output tensors."""
     return 1
 
   @property
@@ -112,7 +157,7 @@ class Operation(object):
     return self._graph
 
   def _create_output_tensors(self):
-    """Set attribute `self._outputs` as the created tensors.
+    """Set attribute `self._outputs` as the created tensors and return them.
 
     Returns:
       outputs (List[Tensor]): the created Tensor instances.
@@ -139,7 +184,7 @@ class Operation(object):
     """Get one output tensor.
 
     Args:
-      index (int): output index of the tensor. Defaults to 0.
+      index (int): (Optional) output index of the tensor. Defaults to 0.
 
     Returns:
       output_tensor (Tensor): the tensor with the provided output index.
@@ -148,7 +193,7 @@ class Operation(object):
     return output_tensor
 
   def _get_dependent_tensor(self, op, name, dic, tensor_index):
-    """Retrieve or create a "dependet" tensor.
+    """Retrieve or create a "dependent" tensor.
 
     Dependent tensors are those that depend on this Op (e.g. Shape, Rank). This
     is to avoid creating multiple `Shape` (or other) tensors of the same Op.
@@ -251,13 +296,16 @@ class Operation(object):
 
 
 def _compute_expected_backprops(op):
-  """Traverse the graph from the `self` Op in the order of BFS, and count the
-  number of gradient tensors that will be backpropped to each Op.
+  """Traverse the graph from the input Op in the order of BFS, and count the
+  number of expected backpropagations for each Tensor.
+
+  Args:
+    op (Operation): the BFS traversal starts from this Op.
 
   Returns:
-    expected_backprops (Dict[int, defaultdict(set)]): dict mapping ID of `op`
-      to a defaultdict, which in turn maps the tensor index to the set of
-      downstream Ops that will backprop gradients to `op`.
+    expected_backprops (Dict[int, int] -> set): dict mapping the ID of a
+      Tensor (combination of `tensor.op.id` and `tensor.tensor_index`) to the
+      set of downstream Ops that will backprop gradients.
   """
   queue = [op]
   expected_backprops = dict()
@@ -278,42 +326,51 @@ def _compute_expected_backprops(op):
 
 
 def backprop(y_tensors, x_tensors, dy_tensors=None):
-  """Backprop gradients `dy_tensors` to each tensor in `x_tensors`.
+  """Inject gradient from each tensor in `y_tensors`, and compute the gradients
+  backpropped to each tensor in `x_tensors`.
 
   Args:
     y_tensors (List[Tensor]): list of tensors from which gradients will be
       backpropped.
     x_tensors (List[Tensor]): list of tensors whose gradients are to be
-      returned.
-    dy_tensors (List[Tensor]): list of gradient tensors w.r.t. tensors in
-      `y_tensors`. If None, defaults to tensors filled with ones.
+      computed.
+    dy_tensors (List[Tensor]): (Optional) list of gradient tensors w.r.t.
+      tensors in `y_tensors`. If None, defaults to tensors filled with ones.
 
   Returns:
-    dx_tensors (List[Tensor]): List of gradient tensors backpropped to each
+    dx_tensors (List[Tensor]): list of gradient tensors backpropped to each
       tensor in `x_tensors`.
   """
   from .generic_ops import OnesLike
   from .math_ops import AddN
+  from .tensor import Tensor
 
   # make sure `dy_tensors` matches `y_tensors`
   if dy_tensors is not None:
     assert len(y_tensors) == len(dy_tensors)
     for y_tensor, dy_tensor in zip(y_tensors, dy_tensors):
-      y_tensor.shape._compatible_with(dy_tensor.shape)
+      assert (
+          isinstance(y_tensor, Tensor) and isinstance(dy_tensor, Tensor) and
+            y_tensor.shape._compatible_with(dy_tensor.shape)
+      )
+  # or initialize `dy_tensors` with a list of Nones
   else:
     dy_tensors = [None] * len(y_tensors)
 
-  # sort `dy_tensors`
+  # `ops`: the list of parent Ops of tensors in `y_tensors`
   ops = list(set([y_tensor.op for y_tensor in y_tensors]))
-  dy_tensor_map = defaultdict(dict)  #dict()
+  dy_tensor_map = defaultdict(dict)
   for y_tensor, dy_tensor in zip(y_tensors, dy_tensors):
     dy_tensor_map[y_tensor.op.id][y_tensor.tensor_index] = dy_tensor
 
-  # prepare grad tensors
-  # if dy_tensor is None, defaults to tensors filled with ones
+  # prepare grad tensors: length of `grad_tensors` equals the sum of the number
+  # of output tensors over all Ops in `ops`
   grad_tensors = []
   for op in ops:
     for i, out_tensor in enumerate(op._outputs):
+      # if an output tensor of `op` is not in `y_tensors` (i.e. keys of
+      # `dy_tensor_map`), or the corresponding gradient tensor is None, create
+      # an all-one Tensor:
       if i not in dy_tensor_map[op.id] or dy_tensor_map[op.id][i] is None:
         grad_tensors.append(
             OnesLike(
@@ -321,20 +378,26 @@ def backprop(y_tensors, x_tensors, dy_tensors=None):
                 graph=y_tensors[0].op._graph,
             ).output(0),
         )
+      # use the provided gradient tensor
       else:
         grad_tensors.append(dy_tensor_map[op.id][i])
 
+  # case1: gradients are backpropped from more than one Ops
   if len(ops) > 1:
+    # create a virtual Op that lumps all Ops in `ops` for backpropagation
     input_list = []
     for op in ops:
       input_list.extend(op._outputs)
     op = _VirtualBackprop(input_list=input_list, graph=y_tensors[0].op._graph)
+  # case2: gradients are backpropped from a single Op
   else:
     op = ops[0]
 
   expected_backprops = _compute_expected_backprops(op)
+  # `queue` maintains tuples of an Op `op` and a list of gradient tensors that
+  # are supposed to be backpropped from `op`
   queue = [(op, grad_tensors)]
-  cum_grad = dict()
+  cum_grad = dict() # cumulative gradients
 
   while len(queue):
     op, dy_tensors = queue.pop(0)
@@ -359,11 +422,12 @@ def backprop(y_tensors, x_tensors, dy_tensors=None):
 
       if tensor.op.id not in cum_grad:
         cum_grad[tensor.op.id] = defaultdict(list)
+      # update the list of cumulative gradients for Tensor `tensor`
       cum_grad[tensor.op.id][tensor.tensor_index].append(grad_tensor)
 
       # when each tensor of an Op has received the expected number of
       # backpropped gradients, compute the full gradient by adding them up,
-      # and enque the tuple (op, dy_tensors).
+      # and enqueue the tuple (op, dy_tensors).
       if all((
           len(expected_backprops[tensor.op.id][tensor_index]) ==
           len(cum_grad[tensor.op.id][tensor_index])
@@ -392,7 +456,22 @@ def backprop(y_tensors, x_tensors, dy_tensors=None):
 
 
 class _VirtualBackprop(Operation):
+  """Virtual Op for grouping multiple Ops for backpropagation.
 
+  Sometimes we need to backprop gradients from multiple Ops (e.g. a main loss
+  from `Tensor` A and an auxiliary loss from `Tensor` B). In this case, we must
+  guarantee that we do not backprop gradient from downstream `Tensor` (e.g. C)
+  until its "full gradient" is computed (i.e. we must wait until gradients
+  backpropped from A *and* B have "arrived at" C.)
+
+  A virtual op `_VirtualBackprop` lumps those Ops by making `Tensor` A and B
+  (and their sibling Tensors) as input Tensors to the virtual op, so that we
+  need to "fire" the backpropagation only once.
+
+  At the time of backpropagation, the virtual op (with `n` input tensors)
+  receives `n` gradient tensors and routes them to each of the `n` input
+  tensors, respectively (See `_grad_func` below).
+  """
   def _grad_func(self, in_grad_tensors):
     out_grad_tensors = list(in_grad_tensors)
     return out_grad_tensors

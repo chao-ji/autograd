@@ -32,6 +32,10 @@ INITIALIZERS = {
     "he_normal": HeNormalInitializer,
 }
 
+# `Variable` has attributes:
+# * weight (Tensor): value of the Tensor
+# * handle (Tensor): ID of the corresponding `CreateVariable` Op
+# * trainable (bool): whether the variable is trainable
 Variable = namedtuple("Variable", ["weight", "handle", "trainable"])
 
 
@@ -112,7 +116,8 @@ class Layer(object):
     assert index in self._variables
     runtime = self._variables[index].weight.op._graph._runtime
     return runtime.get_variable_value(
-        self._variables[index].handle.eval().item().id,
+        #self._variables[index].handle.eval().item().id,
+        self._variables[index].handle.eval(),
     )
 
   def _build(self, shape_list, init_fn_list, flag_list, trainable_list):
@@ -153,10 +158,15 @@ class Layer(object):
       )
 
   def save_variable_weights(self, filename):
+    """Save variable weights to a `.npy` file.
+
+    Args:
+      filename (str): name of the file.
+    """
     assert len(self.variables) > 0
     runtime = self.variables[0].weight.op._graph._runtime
     vids = [
-        v.handle.eval().item().id for v in self.variables
+        str(v.handle.eval()) for v in self.variables
     ]
     variable_values = np.asarray(
         [runtime.get_variable_value(vid) for vid in vids],
@@ -165,17 +175,26 @@ class Layer(object):
     np.save(filename, variable_values)
 
   def load_variable_weights(self, filename):
+    """Load variable weights from a file.
+
+    Args:
+      filename (str): name of the file.
+    """
     weights = np.load(filename, allow_pickle=True)
     assert len(weights) == len(self.variables)
 
     runtime = self.variables[0].weight.op._graph._runtime
     for i, v in enumerate(self.variables):
-      vid = v.handle.eval().item().id
+      vid = str(v.handle.eval())
       runtime.set_variable_value(vid, weights[i])
 
 
 class Dense(Layer):
-  """Dense layer."""
+  """Dense layer.
+
+  Applies linear projection (optionally with bias) to input Tensor of shape
+  [batch, ..., in_channels]
+  """
 
   def __init__(
       self,
@@ -185,6 +204,17 @@ class Dense(Layer):
       kernel_initializer="glorot_uniform",
       bias_initializer="zeros",
   ):
+    """Constructor.
+
+    Args:
+      units (int): number of output channels.
+      activation (callable or str): (Optional) activation function.
+      use_bias (bool): (Optional) whether to add bias.
+      kernel_initializer (callable or str): (Optional) kernel initialization
+        function.
+      bias_initializer (callable or str): (Optional) bias initialization
+        function.
+    """
     super(
         Dense,
         self,
@@ -221,7 +251,10 @@ class Dense(Layer):
 
 
 class Conv2D(Layer):
-  """2D Convolution layer."""
+  """2D Convolution layer.
+
+  Applies 2D convolution on input Tensor of shape BHWC.
+  """
 
   def __init__(
       self,
@@ -234,6 +267,20 @@ class Conv2D(Layer):
       kernel_initializer="glorot_uniform",
       bias_initializer="zeros",
   ):
+    """Constructor.
+
+    Args:
+      filters (int): number of output channels.
+      kernel_size (Tuple): kernel size in height and width dimension.
+      strides (Tuple): stride size in height and width dimension.
+      padding (str): "SAME" or "VALID".
+      activation (callable or str): (Optional) activation function.
+      use_bias (bool): (Optional) whether to add bias.
+      kernel_initializer (callable or str): (Optional) kernel initialization
+        function.
+      bias_initializer (callable or str): (Optional) bias initialization
+        function.
+    """
     super(
         Conv2D,
         self,
@@ -290,6 +337,22 @@ class Conv2DTranspose(Layer):
       kernel_initializer="glorot_uniform",
       bias_initializer="zeros",
   ):
+    """Constructor.
+
+    Args:
+      filters (int): number of output channels.
+      kernel_size (Tuple): kernel size in height and width dimension.
+      strides (Tuple): stride size in height and width dimension.
+      padding (str): "SAME" or "VALID".
+      activation (callable or str): (Optional) activation function.
+      use_bias (bool): (Optional) whether to add bias.
+      outputs_shape (Tuple): (Optional) shape of the output tensor in [batch,
+        out_height, out_width, filters]. Will be inferred if None.
+      kernel_initializer (callable or str): (Optional) kernel initialization
+        function.
+      bias_initializer (callable or str): (Optional) bias initialization
+        function.
+    """
     super(
         Conv2DTranspose,
         self,
@@ -375,6 +438,20 @@ class BatchNormalization(Layer):
       moving_mean_initializer="zeros",
       moving_variance_initializer="ones",
   ):
+    """Constructor.
+
+    Args:
+      axis (int): (Optional) axis that should be normalized (typically the
+        channels axis).
+      momentum (float): (Optional) momentum for the moving average.
+      epsilon (float): (Optional) small float added to variance to avoid
+        dividing by zero.
+      beta_initializer (str): (Optional) the offest parameter initializer.
+      gamma_initializer (str): (Optional) the scaler parameter initializer.
+      moving_mean_initializer (str): (Optional) the moving mean initializer.
+      moving_variance_initializer (str): (Optional) the moving variance
+        initializer.
+    """
     super(BatchNormalization, self).__init__()
     self._axis = axis
     self._momentum = momentum
