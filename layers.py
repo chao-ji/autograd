@@ -116,8 +116,7 @@ class Layer(object):
     assert index in self._variables
     runtime = self._variables[index].weight.op._graph._runtime
     return runtime.get_variable_value(
-        #self._variables[index].handle.eval().item().id,
-        self._variables[index].handle.eval(),
+        self._variables[index].handle.eval().item(),
     )
 
   def _build(self, shape_list, init_fn_list, flag_list, trainable_list):
@@ -166,7 +165,7 @@ class Layer(object):
     assert len(self.variables) > 0
     runtime = self.variables[0].weight.op._graph._runtime
     vids = [
-        str(v.handle.eval()) for v in self.variables
+        v.handle.eval().item() for v in self.variables
     ]
     variable_values = np.asarray(
         [runtime.get_variable_value(vid) for vid in vids],
@@ -185,7 +184,7 @@ class Layer(object):
 
     runtime = self.variables[0].weight.op._graph._runtime
     for i, v in enumerate(self.variables):
-      vid = str(v.handle.eval())
+      vid = v.handle.eval().item()
       runtime.set_variable_value(vid, weights[i])
 
 

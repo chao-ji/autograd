@@ -118,9 +118,11 @@ class Runtime(object):
   def __init__(self):
     """Constructor."""
 
-    # map: OpName -> list of tensor values
+    # Op ID (int) -> list of tensor values (numpy array)
     self._values = collections.defaultdict(list)
+    # CreateVariable Op ID (int) -> variable value (numpy array)
     self._variable_values = dict()
+    # Placeholder Op ID (int) -> placeholder value (numpy array)
     self._placeholder_values = dict()
 
   def get_variable_value(self, creator_id):
@@ -133,7 +135,7 @@ class Runtime(object):
     Returns
       variable_value (nd.array): the value of the variable.
     """
-    variable_value = self._variable_values[int(creator_id)]
+    variable_value = self._variable_values[creator_id]
     return variable_value
 
   def set_variable_value(self, creator_id, new_value):

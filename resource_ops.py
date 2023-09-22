@@ -85,7 +85,7 @@ class AssignVariable(Operation):
   """
 
   def _run(self, creator_id, new_value):
-    self._graph_runtime._variable_values[int(creator_id)] = new_value
+    self._graph_runtime._variable_values[creator_id.item()] = new_value
 
   @property
   def num_outputs(self):
@@ -108,7 +108,7 @@ class AddToVariable(Operation):
   """
 
   def _run(self, creator_id, delta):
-    self._graph._runtime._variable_values[int(creator_id)] += delta
+    self._graph._runtime._variable_values[creator_id.item()] += delta
 
   @property
   def num_outputs(self):
@@ -129,7 +129,7 @@ class ReadVariable(Operation):
   """
 
   def _run(self, creator_id):
-    outputs = self._graph._runtime.get_variable_value(int(creator_id))
+    outputs = self._graph._runtime.get_variable_value(creator_id.item())
     return outputs
 
   def _compute_shapes(self):
