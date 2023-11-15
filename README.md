@@ -3,13 +3,14 @@
 
 ## Introduction
 
-This is a project that I've been contemplating over the years but not able to finish until just recently. The motivation was to demystify how backpropagation algorithm works in machine learning libraries like TensorFlow, which allows you to take a differentiable computational graph and efficiently compute the gradients (first or higher order). The basic idea is to try to build a "mini" framework from the ground up based on the general principles of differentiation and the chain rule of derivatives. By "mini" I mean I try to keep the implementation as minimal as possible by focusing on components that are necessary for defining the graph and computing gradients, so that the codebase is much more readable than a full-fledged library. That said, the collection of Operations in the current version (as of mid 2023) is still reasonably expressive (support math, neural network, N-D array, and data flow operations), which allows you to build common model architectures and can be tested on standard benchmark datasets like [MNIST](http://yann.lecun.com/exdb/mnist/).
+This is a project that I've been contemplating over the years but not able to finish until just recently. The motivation was to demystify how backpropagation algorithm works in machine learning libraries like TensorFlow, which allows you to take a differentiable computational graph and efficiently compute the gradients (first or higher order). The basic idea is to try to build a "mini" framework from scratch, based on the general principles of differentiation and the chain rule of derivatives. By "mini" I mean I try to keep the implementation as minimal as possible by focusing on components that are necessary for defining the graph and computing gradients, so that the codebase is much more readable than a full-fledged library. Having said this, the collection of Operations in the current version (as of mid 2023) is still reasonably expressive (support math, neural network, N-D array, and data flow operations), which allows you to build common model architectures and can be tested on standard benchmark datasets like [MNIST](http://yann.lecun.com/exdb/mnist/).
 
 **Note**: this repository is only intended for sharing the knowledge about how backpropagation works under the hood, and **not for production purposes** (because it only runs on CPU).
 
+
 ## Design
 
-This section briefly discusses the implementation details. Feel free to skip over to [Quick Start](#quick-start).
+This section briefly discusses the implementation details. Feel free to skip over to [Quick Start](#quick-start) and [Examples](#examples).
 
 ### Graph, Operations and Tensors
 
@@ -23,9 +24,9 @@ The Graph is composed of a network of interconnected nodes, called `Operation`s 
 Note that
 
 
-1. Tensors cannot be created out of thin air --- a Tensor is always emitted by a specific "parent" Op.
+1. Tensors cannot be created on their own --- a Tensor is always dependent on and emitted by a specific "parent" Op.
 2. An Op may receive >= 0 Tensors as inputs and generate >= 0 output Tensors.
-3. A Tensor can be uniquely identified by
+3. A Tensor can be uniquely identified by the combination of
  * the ID of its parent Op: `Tensor.op`
  * its index in the output list of the parent Op: `Tensor.tensor_index`
 4. Some Ops does not require an input. For example, a `Const` (constant) Op spits out a Tensor whose value is provided at graph construction time.
