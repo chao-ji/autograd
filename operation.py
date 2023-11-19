@@ -434,17 +434,20 @@ def backprop(y_tensors, x_tensors, dy_tensors=None):
       ) for tensor_index in expected_backprops[tensor.op.id].keys()):
 
         dy_tensors = []
-        for tensor_index in sorted(cum_grad[tensor.op.id].keys()):
-          if len(cum_grad[tensor.op.id][tensor_index]) > 1:
-            grad_tensor = AddN(
-                input_list=cum_grad[tensor.op.id][tensor_index],
-                graph=tensor.op._graph,
-            ).output(0)
+        for tensor_index in range(tensor.op.num_outputs):
+          if tensor_index in cum_grad[tensor.op.id].keys():
+            if len(cum_grad[tensor.op.id][tensor_index]) > 1:
+              grad_tensor = AddN(
+                  input_list=cum_grad[tensor.op.id][tensor_index],
+                  graph=tensor.op._graph,
+              ).output(0)
+            else:
+              grad_tensor = cum_grad[tensor.op.id][tensor_index][0]
+            dy_tensors.append(grad_tensor)
+            cum_grad[tensor.op.id][tensor_index] = [grad_tensor]
           else:
-            grad_tensor = cum_grad[tensor.op.id][tensor_index][0]
+            dy_tensors.append(tensor.op.get_zeros_tensor(tensor_index))
 
-          dy_tensors.append(grad_tensor)
-          cum_grad[tensor.op.id][tensor_index] = [grad_tensor]
         queue.append((tensor.op, dy_tensors))
 
   dx_tensors = []
