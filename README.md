@@ -69,7 +69,7 @@ If a Tensor is consumed by more than one downstream Op, a gradient tensor will b
   Tensor "OpA:0" expects two backpropped gradient tensors ("dOpB:0" and "dOpC:0"). The full gradient will be the sum of them.
 </p>
 
-The following is an example of computing gradients (and gradients or gradients) of a graph. First, the three blue rectangles represent the graph of three Ops, which simply computes the dot product of two tensors `A` and `B` of shape `[2, 3]` and `[3, 5]`, respectively. Second, the two pink rectangles represent the graph with additional Ops, computing the gradient of `C` with respect to `A`, i.e. `Grad(C, A)`. Finally, we further add two Ops (yellow) to compute the gradient of `Grad(C, A)` withe respect to `B`, i.e. `Grad(Grad(C, A), B)`.
+The following is an example of computing gradients (and gradients of gradients) of a graph. First, the three blue rectangles represent the graph of three Ops, which simply computes the dot product of two tensors `A` and `B` of shape `[2, 3]` and `[3, 5]`, respectively. Second, the two pink rectangles represent the graph with additional Ops, computing the gradient of `C` with respect to `A`, i.e. `Grad(C, A)`. Finally, we further add two Ops (yellow) to compute the gradient of `Grad(C, A)` withe respect to `B`, i.e. `Grad(Grad(C, A), B)`.
 
 <p align="center">
   <img src="g3doc/files/fig3.png" width="600">
